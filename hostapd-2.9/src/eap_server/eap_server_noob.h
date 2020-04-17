@@ -48,7 +48,7 @@
 #define INVALID                 0
 #define VALID                   1
 #define NUM_OF_STATES           5
-#define MAX_MSG_TYPES           8
+#define MAX_MSG_TYPES           9
 
 /* OOB DIRECTIONS */
 #define PEER_TO_SERVER          1
@@ -65,6 +65,12 @@
 /* Maximum allowed waiting exchages */
 #define MAX_WAIT_EXCHNG_TRIES   5
 
+/* Keying modes, as defined in Table 3 of draft 8 */
+#define KEYING_COMPLETION_EXCHANGE 0
+#define KEYING_RECONNECT_EXCHANGE_NO_ECDHE 1
+#define KEYING_RECONNECT_EXCHANGE_ECDHE 2
+#define KEYING_RECONNECT_EXCHANGE_NEW_CRYPTOSUITE 3
+
 /* keywords for json encoding and decoding */
 #define TYPE                    "Type"
 #define ERRORINFO               "ErrorInfo"
@@ -77,6 +83,7 @@
 #define SLEEPTIME               "SleepTime"
 #define PEERID                  "PeerId"
 #define PKS                     "PKs"
+#define PKS2					"PKs2"
 #define SERVERINFO              "ServerInfo"
 #define MACS                    "MACs"
 #define MACS2                   "MACs2"
@@ -89,6 +96,7 @@
 #define NP                      "Np"
 #define NP2                     "Np2"
 #define PKP                     "PKp"
+#define	PKP2					"PKp2"
 #define PEERINFO                "PeerInfo"
 //#define PEERSTATE               "state"
 #define NOOBID                  "NoobId"
@@ -212,8 +220,8 @@ enum {NONE, EAP_NOOB_TYPE_1, EAP_NOOB_TYPE_2, EAP_NOOB_TYPE_3, EAP_NOOB_TYPE_4, 
 enum {UPDATE_PERSISTENT_STATE, UPDATE_STATE_MINSLP, UPDATE_PERSISTENT_KEYS_SECRET, UPDATE_STATE_ERROR,
     UPDATE_INITIALEXCHANGE_INFO, GET_NOOBID};
 
-enum eap_noob_err_code{NO_ERROR, E1001, E1002, E1003, E1004, E1005, E1006, E1007, E2001, E2002, E3001,
-    E3002, E3003, E4001};
+enum eap_noob_err_code {NO_ERROR, E1001, E1002, E1003, E1004, E1007, E2001, E2002,
+                        E2003, E2004, E3001, E3002, E3003, E4001, E5001, E5002, E5003, E5004};
 
 enum {HOOB_TYPE, MACS_TYPE, MACP_TYPE};
 
@@ -335,23 +343,27 @@ struct eap_noob_server_context {
     sqlite3 * server_db;
 };
 
-const int error_code[] = {0, 1001, 1002, 1003, 1004, 1005, 1006, 1007, 2001, 2002, 3001, 3002, 3003, 4001};
+const int error_code[] =  {0,1001,1002,1003,1004,1007,2001,2002,2003,2004,3001,3002,3003,4001,5001,5002,5003,5004};
 
-const char *error_info[] = {
+const char *error_info[] =  {
     "No error",
-    "Invalid NAI or peer state",
+    "Invalid NAI",
     "Invalid message structure",
     "Invalid data",
     "Unexpected message type",
-    "Unexpected peer identifier",
-    "Unrecognized OOB message identifier",
-    "Invalid ECDH key",
+    "Invalid ECDHE key",
     "Unwanted peer",
     "State mismatch, user action required",
+    "Unrecognized OOB message identifier",
+    "Unexpected peer identifier",
     "No mutually supported protocol version",
     "No mutually supported cryptosuite",
     "No mutually supported OOB direction",
-    "MAC verification failure" };
+    "HMAC verification failure",
+    "Application-specific error",
+    "Invalid server info",
+    "Invalid server URL",
+    "Invalid peer info"};
 
 
 /* This 2-D arry is used for state validation.
@@ -379,11 +391,11 @@ const int next_request_type[] = {
 
 /*server state vs message type matrix*/
 const int state_message_check[NUM_OF_STATES][MAX_MSG_TYPES] = {
-    {VALID, VALID,   VALID,   INVALID,  INVALID,  INVALID,  INVALID,  INVALID}, //UNREGISTERED_STATE
-    {VALID, VALID,   VALID,   VALID,    VALID,    INVALID,  INVALID,  INVALID}, //WAITING_FOR_OOB_STATE
-    {VALID, VALID,   VALID,   INVALID,  VALID,    INVALID,  INVALID,  INVALID}, //OOB_RECEIVED_STATE
-    {VALID, INVALID, INVALID, INVALID,  INVALID,  VALID,    VALID,    VALID},   //RECONNECT
-    {VALID, INVALID, INVALID, INVALID,  VALID,    INVALID,  INVALID,  INVALID}, //REGISTERED_STATE
+    {VALID, VALID,   VALID,   INVALID,  INVALID,  INVALID,  INVALID,  INVALID, VALID}, //UNREGISTERED_STATE
+    {VALID, VALID,   VALID,   VALID,    VALID,    INVALID,  INVALID,  INVALID, VALID}, //WAITING_FOR_OOB_STATE
+    {VALID, VALID,   VALID,   INVALID,  VALID,    INVALID,  INVALID,  INVALID, VALID}, //OOB_RECEIVED_STATE
+    {VALID, INVALID, INVALID, INVALID,  INVALID,  VALID,    VALID,    VALID,   VALID},   //RECONNECT
+    {VALID, INVALID, INVALID, INVALID,  VALID,    INVALID,  INVALID,  INVALID, VALID}, //REGISTERED_STATE
 };
 
 #define EAP_NOOB_STATE_VALID                                                              \
