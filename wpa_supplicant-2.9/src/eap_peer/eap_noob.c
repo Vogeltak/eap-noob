@@ -1213,7 +1213,7 @@ static struct wpabuf * eap_noob_verify_PeerId(struct eap_noob_peer_context * dat
 {
     if ((data->server_attr->PeerId) && (data->peer_attr->PeerId) &&
         (0 != os_strcmp(data->peer_attr->PeerId, data->server_attr->PeerId))) {
-        data->server_attr->err_code = E1005;
+        data->server_attr->err_code = E2004;
         return eap_noob_err_msg(data, id);
     }
     return NULL;
@@ -1847,7 +1847,7 @@ static struct wpabuf * eap_noob_req_type_four(struct eap_sm * sm, json_t * req_o
        int ret = eap_noob_exec_noobid_queries(data);
        if(ret == FAILURE || ret == EMPTY){ 
         wpa_printf(MSG_DEBUG, "EAP-NOOB: Unrecognized NoobId");
-        data->server_attr->err_code = E1006;
+        data->server_attr->err_code = E2003;
         resp = eap_noob_err_msg(data,id); 
         return resp;
        }

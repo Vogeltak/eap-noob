@@ -81,8 +81,8 @@ static int eap_noob_verify_peerId(struct eap_noob_server_context * data)
     }
     wpa_printf(MSG_DEBUG, "EAP-NOOB: Entering %s", __func__);
     if (0 != strcmp(data->peer_attr->PeerId, data->peer_attr->peerid_rcvd)) {
-        wpa_printf(MSG_DEBUG, "EAP-NOOB: Verification of PeerId failed, setting error E1005");
-        eap_noob_set_error(data->peer_attr, E1005); return FAILURE;
+        wpa_printf(MSG_DEBUG, "EAP-NOOB: Verification of PeerId failed, setting error E2004");
+        eap_noob_set_error(data->peer_attr, E2004); return FAILURE;
     }
     return SUCCESS;
 }
@@ -478,7 +478,7 @@ static int eap_noob_query_ephemeralstate(struct eap_noob_server_context * data)
         wpa_printf(MSG_DEBUG, "Peer not found in ephemeral table");
         if (FAILURE == eap_noob_exec_query(data, QUERY_PERSISTENTSTATE, columns_persistentstate, 2,
                    TEXT, data->peer_attr->peerid_rcvd)) {
-            eap_noob_set_error(data->peer_attr, E1005); /* Unexpected peerId */
+            eap_noob_set_error(data->peer_attr, E2004); /* Unexpected peerId */
             return FAILURE;
         } else {
             eap_noob_set_error(data->peer_attr, E1001); /* Invalid NAI or peer state */
@@ -503,7 +503,7 @@ static int eap_noob_query_persistentstate(struct eap_noob_server_context * data)
                    TEXT, data->peer_attr->peerid_rcvd)) {
         if (FAILURE == eap_noob_exec_query(data, QUERY_EPHEMERALSTATE, columns_ephemeralstate, 2,
                     TEXT, data->peer_attr->peerid_rcvd)) {
-            eap_noob_set_error(data->peer_attr, E1005);
+            eap_noob_set_error(data->peer_attr, E2004);
             return FAILURE;
         } else {
             eap_noob_set_error(data->peer_attr, E1001);
@@ -2412,13 +2412,13 @@ static void eap_noob_rsp_noobid(struct eap_noob_server_context * data, json_t * 
     }
 
     if (!eap_noob_verify_peerId(data)) {
-        eap_noob_set_error(data->peer_attr,E1005);
+        eap_noob_set_error(data->peer_attr,E2004);
         eap_noob_set_done(data, NOT_DONE);
         return;
     }
 
     if (!eap_noob_db_functions(data, GET_NOOBID) || NULL == data->peer_attr->oob_data->NoobId_b64) {
-        eap_noob_set_error(data->peer_attr,E1006);
+        eap_noob_set_error(data->peer_attr,E2003);
         eap_noob_set_done(data,NOT_DONE);
     } else {
         eap_noob_set_done(data, NOT_DONE);
