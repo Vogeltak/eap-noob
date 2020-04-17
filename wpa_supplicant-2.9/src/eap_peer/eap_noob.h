@@ -72,6 +72,7 @@
 #define NS2                     "Ns2"
 #define SLEEPTIME               "SleepTime"
 #define PEERID                  "PeerId"
+#define PEERSTATE               "PeerState"
 #define PKS                     "PKs"
 #define	PKS2					"PKs2"
 #define SERVERINFO              "ServerInfo"
@@ -206,7 +207,7 @@ enum {UNREGISTERED_STATE, WAITING_FOR_OOB_STATE, OOB_RECEIVED_STATE, RECONNECTIN
 enum {COMPLETION_EXCHANGE, RECONNECT_EXCHANGE, RECONNECT_EXCHANGE_NEW};
 
 enum {NONE, EAP_NOOB_TYPE_1, EAP_NOOB_TYPE_2, EAP_NOOB_TYPE_3, EAP_NOOB_TYPE_4, EAP_NOOB_TYPE_5,
-      EAP_NOOB_TYPE_6, EAP_NOOB_TYPE_7, EAP_NOOB_HINT};
+      EAP_NOOB_TYPE_6, EAP_NOOB_TYPE_7, EAP_NOOB_HINT, EAP_NOOB_TYPE_9};
 
 enum eap_noob_err_code {NO_ERROR, E1001, E1002, E1003, E1004, E1007, E2001, E2002,
                         E2003, E2004, E3001, E3002, E3003, E4001, E5001, E5002, E5003, E5004};
