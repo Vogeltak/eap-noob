@@ -2046,6 +2046,11 @@ static void  eap_noob_decode_obj(struct eap_noob_peer_data * data, json_t * resp
                     PKp_str = json_dumps(value, JSON_COMPACT|JSON_PRESERVE_ORDER);
                     data->ecdh_exchange_data->jwk_peer = json_loads(PKp_str, JSON_COMPACT|JSON_PRESERVE_ORDER, &error);
                     os_free(PKp_str); data->rcvd_params |= PKEY_RCVD;
+                } else if (0 == strcmp(key, PKP2)) {
+				    PKp2_str = json_dumps(values, JSON_COMPACT|JSON_PRESERVE_ORDER);
+				    data->ecdh_exchange_data->jwk_peer = json_loads(PKp2_str, JSON_COMPACT|JSON_PRESERVE_ORDER, &error);
+				    os_free(PKp2_str);
+				    data->rcvd_params |= PKEY_RCVD;
                 } else if (0 == strcmp(key, PEERINFO)) {
                     data->peerinfo = json_dumps(value, JSON_COMPACT|JSON_PRESERVE_ORDER);
                     wpa_printf(MSG_DEBUG, "EAP-NOOB: Peer Info: %s", data->peerinfo);
@@ -2058,7 +2063,9 @@ static void  eap_noob_decode_obj(struct eap_noob_peer_data * data, json_t * resp
                         (0 != strcmp(key,TYPE))) {
                     eap_noob_set_error(data, E1003); return;
                 }
-                if (0 == strcmp(key, VERP)) {
+                if (0 == strcmp(key, PEERSTATE)) {
+                    data->peer_state = retval_int;
+                } else if (0 == strcmp(key, VERP)) {
                     data->version = retval_int; data->rcvd_params |= VERSION_RCVD;
                 } else if (0 == strcmp(key, CRYPTOSUITEP)) {
                     data->cryptosuite = retval_int; data->rcvd_params |= CRYPTOSUITEP_RCVD;
@@ -2421,6 +2428,12 @@ static void eap_noob_rsp_noobid(struct eap_noob_server_context * data, json_t * 
     data->peer_attr->rcvd_params = 0;
 }
 
+static void eap_noob_rsp_type_nine(struct eap_noob_server_context * data, json_t * resp_obj)
+{
+    // Retrieve PeerId and PeerState from the response of the peer
+    eap_noob_decode_obj(data->peer_attr, resp_obj);
+}
+
 /**
  * eap_oob_process - Control Process EAP-Response.
  * @sm: Pointer to EAP state machine allocated with eap_peer_sm_init()
@@ -2507,6 +2520,10 @@ static void eap_noob_process(struct eap_sm * sm, void * priv, struct wpabuf * re
         case EAP_NOOB_TYPE_8:
             wpa_printf(MSG_DEBUG, "EAP-NOOB: ENTERING NOOB PROCESS TYPE NoobId");
             eap_noob_rsp_noobid(data, resp_obj);
+            break;
+        case EAP_NOOB_TYPE_9:
+            wpa_printf(MSG_DEBUG, "EAP-NOOB: ENTERING NOOB PROCESS TYPE 9");
+            eap_noob_rsp_type_nine(data, resp_obj);
             break;
 
         case NONE:
