@@ -317,7 +317,7 @@ struct eap_noob_peer_data {
     u32 version;
     u32 state;
     u32 cryptosuite;
-    u32 cyrptosuitePrev;
+    u32 cryptosuitePrev;
     u32 dir;
     u32 minsleep;
     u32 config_params;
