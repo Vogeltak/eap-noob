@@ -1490,11 +1490,11 @@ static struct wpabuf * eap_noob_rsp_type_nine(const struct eap_noob_peer_context
     if (NULL == data) {
 		wpa_printf(MSG_DEBUG, "EAP-NOOB: Input arguments NULL for function $s", __func__);
 		return NULL;
-	}
+    }
 	
-	err -= (NULL == (rsp_obj = json_object()));
-	err += json_object_set_new(rsp_obj, TYPE, json_integer(EAP_NOOB_TYPE_9));
-	err += json_object_set_new(rsp_obj, PEERID,json_string(data->server_attr->PeerId));
+    err -= (NULL == (rsp_obj = json_object()));
+    err += json_object_set_new(rsp_obj, TYPE, json_integer(EAP_NOOB_TYPE_9));
+    err += json_object_set_new(rsp_obj, PEERID,json_string(data->server_attr->PeerId));
     err += json_object_set_new(rsp_obj, PEERSTATE, json_integer(data->peer_attr->state));
     err -= (NULL == (resp_json = json_dumps(rsp_obj,JSON_COMPACT|JSON_PRESERVE_ORDER)));
     
@@ -2212,8 +2212,8 @@ static struct wpabuf * eap_noob_process(struct eap_sm * sm, void * priv, struct 
             resp = eap_noob_req_type_eight(sm, req_obj, data, id);
             break;
         case EAP_NOOB_TYPE_9:
-		    resp = eap_noob_req_type_nine(sm, req_obj, data, id);
-		    break;
+            resp = eap_noob_req_type_nine(sm, req_obj, data, id);
+            break;
         default:
             wpa_printf(MSG_DEBUG, "EAP-NOOB: Unknown EAP-NOOB request received");
             break;

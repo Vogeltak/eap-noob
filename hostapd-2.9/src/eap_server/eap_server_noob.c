@@ -2047,10 +2047,10 @@ static void  eap_noob_decode_obj(struct eap_noob_peer_data * data, json_t * resp
                     data->ecdh_exchange_data->jwk_peer = json_loads(PKp_str, JSON_COMPACT|JSON_PRESERVE_ORDER, &error);
                     os_free(PKp_str); data->rcvd_params |= PKEY_RCVD;
                 } else if (0 == strcmp(key, PKP2)) {
-				    PKp2_str = json_dumps(values, JSON_COMPACT|JSON_PRESERVE_ORDER);
-				    data->ecdh_exchange_data->jwk_peer = json_loads(PKp2_str, JSON_COMPACT|JSON_PRESERVE_ORDER, &error);
-				    os_free(PKp2_str);
-				    data->rcvd_params |= PKEY_RCVD;
+                    PKp2_str = json_dumps(values, JSON_COMPACT|JSON_PRESERVE_ORDER);
+                    data->ecdh_exchange_data->jwk_peer = json_loads(PKp2_str, JSON_COMPACT|JSON_PRESERVE_ORDER, &error);
+                    os_free(PKp2_str);
+                    data->rcvd_params |= PKEY_RCVD;
                 } else if (0 == strcmp(key, PEERINFO)) {
                     data->peerinfo = json_dumps(value, JSON_COMPACT|JSON_PRESERVE_ORDER);
                     wpa_printf(MSG_DEBUG, "EAP-NOOB: Peer Info: %s", data->peerinfo);
