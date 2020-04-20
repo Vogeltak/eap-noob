@@ -178,13 +178,6 @@
     CreationTime BIGINT,                            \
     last_used_time BIGINT);"
 
-#define CREATE_TABLES_RADIUS                        \
-    "CREATE TABLE IF NOT EXISTS radius(             \
-    called_st_id TEXT,                              \
-    calling_st_id  TEXT,                            \
-    NAS_id TEXT,                                    \
-    user_name TEXT PRIMARY KEY)"
-
 #define DELETE_EPHEMERAL_FOR_PEERID                 \
     "DELETE FROM EphemeralNoob WHERE PeerId=?;      \
     DELETE FROM EphemeralState WHERE PeerId=?;"
