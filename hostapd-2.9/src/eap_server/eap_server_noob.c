@@ -2030,6 +2030,7 @@ static void  eap_noob_decode_obj(struct eap_noob_peer_data * data, json_t * resp
 {
     const char * key = NULL, * retval_char = NULL;
     char * PKp_str = NULL;
+    char * PKp2_str = NULL;
     json_t * value = NULL;
     json_error_t error;
     size_t decode_length = 0;
@@ -2047,7 +2048,7 @@ static void  eap_noob_decode_obj(struct eap_noob_peer_data * data, json_t * resp
                     data->ecdh_exchange_data->jwk_peer = json_loads(PKp_str, JSON_COMPACT|JSON_PRESERVE_ORDER, &error);
                     os_free(PKp_str); data->rcvd_params |= PKEY_RCVD;
                 } else if (0 == strcmp(key, PKP2)) {
-                    PKp2_str = json_dumps(values, JSON_COMPACT|JSON_PRESERVE_ORDER);
+                    PKp2_str = json_dumps(value, JSON_COMPACT|JSON_PRESERVE_ORDER);
                     data->ecdh_exchange_data->jwk_peer = json_loads(PKp2_str, JSON_COMPACT|JSON_PRESERVE_ORDER, &error);
                     os_free(PKp2_str);
                     data->rcvd_params |= PKEY_RCVD;
