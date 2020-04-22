@@ -1474,7 +1474,7 @@ EXIT:
 }
 
 /**
- * Prepare peer response to server request for PeerId and PeerState.
+ * Prepare peer response to common handshake
  * @data   : peer context
  * @id     : response message id
  * Returns : pointer to message buffer containing json response as string
@@ -1494,8 +1494,13 @@ static struct wpabuf * eap_noob_rsp_type_nine(const struct eap_noob_peer_context
 	
     err -= (NULL == (rsp_obj = json_object()));
     err += json_object_set_new(rsp_obj, TYPE, json_integer(EAP_NOOB_TYPE_9));
-    err += json_object_set_new(rsp_obj, PEERID,json_string(data->server_attr->PeerId));
-    err += json_object_set_new(rsp_obj, PEERSTATE, json_integer(data->peer_attr->state));
+    
+    // Only include PeerId if peer is not in Unregistered state (0)
+    if (data->server_attr->state != UNREGISTERED_STATE) {
+        err += json_object_set_new(rsp_obj, PEERID,json_string(data->server_attr->PeerId));
+    }
+    
+    err += json_object_set_new(rsp_obj, PEERSTATE, json_integer(data->server_attr->state));
     err -= (NULL == (resp_json = json_dumps(rsp_obj,JSON_COMPACT|JSON_PRESERVE_ORDER)));
     
     if (err < 0) goto EXIT;
