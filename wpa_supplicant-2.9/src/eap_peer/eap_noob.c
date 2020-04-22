@@ -67,7 +67,7 @@ static int eap_noob_Base64Decode(const char * b64message, unsigned char ** buffe
     fprintf(stderr, "ENTER B64DECODE FUN\n");
     size_t len = os_strlen(b64message);
     size_t b64pad = 4*((len + 3)/4) - len;
-    unsigned char *temp = os_zalloc(len + b64pad + 1);
+    char *temp = os_zalloc(len + b64pad + 1);
     if (temp == NULL) 
 	    return -1;
     os_memcpy(temp, b64message, len);
@@ -100,7 +100,7 @@ static int eap_noob_Base64Decode(const char * b64message, unsigned char ** buffe
 int eap_noob_Base64Encode(const unsigned char * buffer, size_t length, char ** b64text)
 {
     size_t len = 0;
-    unsigned char *tmp;
+    char *tmp;
     tmp = base64_encode(buffer, length, &len);
     if (tmp == NULL)
 	    return -1;
@@ -1488,7 +1488,7 @@ static struct wpabuf * eap_noob_rsp_type_nine(const struct eap_noob_peer_context
     int err = 0;
     
     if (NULL == data) {
-		wpa_printf(MSG_DEBUG, "EAP-NOOB: Input arguments NULL for function $s", __func__);
+		wpa_printf(MSG_DEBUG, "EAP-NOOB: Input arguments NULL for function %s", __func__);
 		return NULL;
     }
 	
