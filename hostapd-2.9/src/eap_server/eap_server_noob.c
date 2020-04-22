@@ -1842,28 +1842,35 @@ static struct wpabuf * eap_noob_req_type_nine(struct eap_noob_server_context * d
     int err = 0;
 
     if (NULL == data) {
-		wpa_printf(MSG_DEBUG, "EAP-NOOB: Input to %s is null", __func__);
-		return NULL;
-	}
+        wpa_printf(MSG_DEBUG, "EAP-NOOB: Input to %s is null", __func__);
+        return NULL;
+    }
 
-	// Object to send by server is {"Type": 9}
-	err -= (NULL == (req_obj = json_object()));
-	err += json_object_set_new(req_obj, TYPE, json_integer(EAP_NOOB_TYPE_9));
+    // Object to send by server is {"Type": 9}
+    err -= (NULL == (req_obj = json_object()));
+    err += json_object_set_new(req_obj, TYPE, json_integer(EAP_NOOB_TYPE_9));
 
-	if (err < 0) {
-		wpa_printf((MSG_DEBUG, "EAP-NOOB: Unexpected error in preparing JSON object");
-		goto EXIT;
-	}
+    if (err < 0) {
+        wpa_printf(MSG_DEBUG, "EAP-NOOB: Unexpected error in preparing JSON object");
+        goto EXIT;
+    }
 
-	len = strlen(req_json) + 1;
-	req = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB, len, EAP_CODE_REQUEST, id);
+    req_json = json_dumps(req_obj, JSON_COMPACT|JSON_PRESERVE_ORDER);
 
-	if (req == NULL) {
-		wpa_printf(MSG_ERROR, "EAP-NOOB: Failed to allocate memory for Request/NOOB-ID");
-		goto EXIT;
-	}
+    if (req_json == NULL) {
+        wpa_printf(MSG_DEBUG, "EAP-NOOB: Unexpected error in preparing JSON object");
+        goto EXIT;
+    }
 
-	wpabuf_put_data(req, req_json, len);
+    len = strlen(req_json) + 1;
+    req = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB, len, EAP_CODE_REQUEST, id);
+
+    if (req == NULL) {
+        wpa_printf(MSG_ERROR, "EAP-NOOB: Failed to allocate memory for Request/NOOB-ID");
+        goto EXIT;
+    }
+
+    wpabuf_put_data(req, req_json, len);
 
 EXIT:
     json_decref(req_obj);
@@ -2838,7 +2845,7 @@ static int eap_noob_server_ctxt_init(struct eap_noob_server_context * data, stru
             data->peer_attr->next_req = EAP_NOOB_TYPE_9;
         }
     }
-EXIT:
+
     EAP_NOOB_FREE(NAI);
     if (retval == FAILURE)
         wpa_printf(MSG_DEBUG, "EAP-NOOB: Failed to initialize context");
