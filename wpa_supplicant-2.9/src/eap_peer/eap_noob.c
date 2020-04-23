@@ -1428,7 +1428,10 @@ static struct wpabuf * eap_noob_rsp_type_one(struct eap_sm *sm,const struct eap_
     err += json_object_set_new(rsp_obj,DIRP,json_integer(data->peer_attr->dir));
     err += json_object_set(rsp_obj,PEERINFO,data->peer_attr->PeerInfo);
     err -= (NULL == (resp_json = json_dumps(rsp_obj, JSON_COMPACT|JSON_PRESERVE_ORDER)));
-    if (err < 0) goto EXIT;
+    if (err < 0) {
+        wpa_printf(MSG_ERROR, "EAP-NOOB: error while generating json response for message type 1");
+        goto EXIT;
+    }
 
     len = strlen(resp_json)+1;
     wpa_printf(MSG_DEBUG, "EAP-NOOB: RESPONSE = %s = %d", resp_json, (int)strlen(resp_json));
@@ -2347,6 +2350,7 @@ static int eap_noob_create_db(struct eap_sm *sm, struct eap_noob_peer_context * 
     if (SQLITE_OK != sqlite3_open_v2(data->db_name, &data->peer_db,
                 SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, NULL)) {
         wpa_printf(MSG_ERROR, "EAP-NOOB: No DB found,new DB willbe created");
+        wpa_printf(MSG_ERROR, "EAP-NOOB: sqlite error: %s", sqlite3_errmsg(data->peer_db));
         return FAILURE;
     }
 

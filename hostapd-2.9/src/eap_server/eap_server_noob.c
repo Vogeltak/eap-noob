@@ -2124,7 +2124,7 @@ static void  eap_noob_decode_obj(struct eap_noob_peer_data * data, json_t * resp
                 break;
             case JSON_INTEGER:
                 if (0 == (retval_int = json_integer_value(value)) &&
-                        (0 != strcmp(key,TYPE))) {
+                        (0 != strcmp(key,TYPE)) && (0 != strcmp(key,PEERSTATE))) {
                     eap_noob_set_error(data, E1003); return;
                 }
                 if (0 == strcmp(key, PEERSTATE)) {
