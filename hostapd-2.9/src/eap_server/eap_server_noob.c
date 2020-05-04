@@ -2508,6 +2508,10 @@ static void eap_noob_rsp_type_nine(struct eap_noob_server_context * data, json_t
     // after concluding the common handshake.
     if (data->peer_attr->err_code == NO_ERROR) {
         data->peer_attr->next_req = eap_noob_get_next_req(data);
+    } else {
+        wpa_printf(MSG_ERROR, "EAP-NOOB: Could not get next request type, error in peer attr: %d", data->peer_attr->err_code);
+        result = FAILURE;
+        goto EXIT;
     }
 
     if (data->peer_attr->server_state == UNREGISTERED_STATE ||

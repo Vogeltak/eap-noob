@@ -11,7 +11,7 @@
 #define DEFAULT_REALM               "eap-noob.net"
 #define VERSION_ONE                 1
 #define SUITE_ONE                   1
-#define DB_NAME                     "/tmp/peer_connection_db"
+#define DB_NAME                     "/tmp/noob_peer.db"
 #define NOOB_LEN                    16
 #define NOOBID_LEN                  16
 #define NONCE_LEN                   32

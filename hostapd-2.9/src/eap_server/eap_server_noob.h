@@ -139,7 +139,7 @@
 #define TYPE_EIGHT_PARAMS       (PEERID_RCVD|NOOBID_RCVD)
 
 #define CONF_PARAMS             (DIRP_RCVD|CRYPTOSUITEP_RCVD|VERSION_RCVD|SERVER_NAME_RCVD|SERVER_URL_RCVD|WE_COUNT_RCVD|REALM_RCVD|ENCODE_RCVD)
-#define DB_NAME                 "/tmp/peer_connection_db"
+#define DB_NAME                 "/tmp/noob_server.db"
 #define DEVICE_TABLE            "devices"
 
 #define CREATE_TABLES_EPHEMERALSTATE                \
