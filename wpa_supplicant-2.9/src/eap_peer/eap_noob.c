@@ -48,6 +48,7 @@
 #include <sqlite3.h>
 #include <jansson.h>
 #include "common.h"
+#include "utils/json.h"
 #include "eap_i.h"
 #include "eap_noob.h"
 #include "../../wpa_supplicant/config.h"
@@ -302,29 +303,46 @@ static int eap_noob_gen_KDF(struct eap_noob_peer_context * data, int state)
  * @data : peer context.
  * returns : reference to a new object or NULL.
 **/
-static json_t * eap_noob_prepare_peer_info_json(struct eap_sm * sm, struct eap_noob_peer_config_params * data)
+static char * eap_noob_prepare_peer_info_json(struct eap_sm * sm, struct eap_noob_peer_config_params * data)
 {
-    json_t * info_obj = NULL;
+    char * resp = NULL;
+    struct wpabuf * json = NULL;
     struct wpa_supplicant * wpa_s = (struct wpa_supplicant *) sm->msg_ctx;
-    char bssid[18] = {0}; int err = 0;
+    char bssid[18] = {0};
 
-    if (NULL == data) {
-        wpa_printf(MSG_DEBUG, "EAP-NOOB: Input arguments NULL for function %s",__func__); return NULL;
+    if (!data) {
+        wpa_printf(MSG_DEBUG, "EAP-NOOB: Input arguments NULL for function %s",__func__);
+        return NULL;
     }
-    err -= (NULL == (info_obj = json_object()));
-    err += json_object_set_new(info_obj, PEER_MAKE,json_string(data->Peer_name));
-    err += json_object_set_new(info_obj, PEER_TYPE,json_string(eap_noob_globle_conf.peer_type));
-    err += json_object_set_new(info_obj, PEER_SERIAL_NUM,json_string(data->Peer_ID_Num));
-    err += json_object_set_new(info_obj, PEER_SSID,json_string((char *)wpa_s->current_ssid->ssid));
+
+    json = wpabuf_alloc(MAX_INFO_LEN);
+    if (!json) {
+        wpa_printf(MSG_ERROR, "EAP-NOOB: Failed to allocate memory for JSON wpabuf");
+        return NULL;
+    }
+
+    json_start_object(json, NULL);
+    json_add_string(json, PEER_MAKE, data->Peer_name);
+    json_value_sep(json);
+    json_add_string(json, PEER_TYPE, eap_noob_globle_conf.peer_type);
+    json_value_sep(json);
+    json_add_string(json, PEER_SERIAL_NUM, data->Peer_ID_Num);
+    json_value_sep(json);
+    json_add_string(json, PEER_SSID, (char *) wpa_s->current_ssid->ssid);
+
     sprintf(bssid,"%x:%x:%x:%x:%x:%x",wpa_s->current_ssid->bssid[0],wpa_s->current_ssid->bssid[1],
             wpa_s->current_ssid->bssid[2],wpa_s->current_ssid->bssid[3],wpa_s->current_ssid->bssid[4],
             wpa_s->current_ssid->bssid[5]);
-    err += json_object_set_new(info_obj,PEER_BSSID,json_string(bssid));
-    if (err < 0) {
-        wpa_printf(MSG_DEBUG, "EAP-NOOB: Unexpected error in preparing jon object");
-        json_decref(info_obj); return NULL;
-    }
-    return info_obj;
+
+    json_value_sep(json);
+    json_add_string(json, PEER_BSSID, bssid);
+    json_end_object(json);
+
+    resp = strndup(wpabuf_head(json), wpabuf_len(json));
+    
+    wpabuf_free(json);
+
+    return resp;
 }
 
 /**
@@ -1173,34 +1191,46 @@ EXIT:
 **/
 static struct wpabuf * eap_noob_err_msg(struct eap_noob_peer_context * data, u8 id)
 {
-    json_t * req_obj = NULL;
+    struct wpabuf * json = NULL;
     struct wpabuf * resp = NULL;
-    char * req_json = NULL;
-    size_t len = 0; int err = 0, code = 0;
+    size_t len = 100 + strlen(TYPE) + strlen(ERRORCODE) + strlen(ERRORINFO);
+    size_t code = 0;
 
-    if (NULL == data || NULL == data->peer_attr || 0 == (code = data->server_attr->err_code)) {
-        wpa_printf(MSG_DEBUG, "EAP-NOOB: Input to %s is null", __func__);
-        return NULL;
+    if (!data || !data->peer_attr || !(code = data->server_attr->err_code)) {
+        wpa_printf(MSG_DEBUG, "EAP-NOOB: Input to %s is NULL", __func__);
+        goto EXIT;
     }
-    wpa_printf(MSG_DEBUG, "EAP-NOOB: Build error request");
 
-    err -= (NULL == (req_obj = json_object()));
-    if (data->peer_attr->PeerId)
-        err += json_object_set_new(req_obj,PEERID,json_string(data->peer_attr->PeerId));
-    err += json_object_set_new(req_obj, TYPE, json_integer(NONE));
-    err += json_object_set_new(req_obj, ERRORCODE, json_integer(error_code[code]));
-    err += json_object_set_new(req_obj, ERRORINFO, json_string(error_info[code]));
-    err -= (NULL == (req_json = json_dumps(req_obj,JSON_COMPACT|JSON_PRESERVE_ORDER)));
-    if (err < 0) goto EXIT;
-    wpa_printf(MSG_DEBUG, "EAP-NOOB: ERROR message = %s == %d", req_json, (int)strlen(req_json));
-    len = strlen(req_json)+1;
-    if (NULL == (resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB, len, EAP_CODE_RESPONSE, id))) {
-        wpa_printf(MSG_ERROR, "EAP-NOOB: Failed to allocate memory for NOOB ERROR message"); goto EXIT;
+    wpa_printf(MSG_DEBUG, "EAP-NOOB: Build error message");
+
+    len += strlen(error_info[code]);
+
+    json = wpabuf_alloc(len);
+    if (!json) {
+        goto EXIT;
     }
-    wpabuf_put_data(resp, req_json, len);
+
+    json_start_object(json, NULL);
+    json_add_int(json, TYPE, NONE);
+    json_value_sep(json);
+    if (data->peer_attr->PeerId) {
+        json_add_string(json, PEERID, data->peer_attr->PeerId);
+        json_value_sep(json);
+    }
+    json_add_int(json, ERRORCODE, error_code[code]);
+    json_value_sep(json);
+    json_add_string(json, ERRORINFO, error_info[code]);
+    json_end_object(json);
+
+    resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB, len, EAP_CODE_RESPONSE, id);
+    if (!resp) {
+        wpa_printf(MSG_DEBUG, "EAP-NOOB: Failed to allocate memory for error message response");
+        goto EXIT;
+    }
+
+    wpabuf_put_buf(resp, json);
 EXIT:
-    json_decref(req_obj);
-    EAP_NOOB_FREE(req_json);
+    wpabuf_free(json);
     return resp;
 }
 
@@ -1227,36 +1257,52 @@ static struct wpabuf * eap_noob_verify_PeerId(struct eap_noob_peer_context * dat
 **/
 static struct wpabuf * eap_noob_rsp_type_four(const struct eap_noob_peer_context * data, u8 id)
 {
-    json_t * rsp_obj = NULL;
+    struct wpabuf * json = NULL;
     struct wpabuf * resp = NULL;
-    char * resp_json = NULL, * mac_b64 = NULL;
-    size_t len = 0; int err = 0;
+    size_t len = 100 + strlen(TYPE) + strlen(PEERID) + MAX_PEER_ID_LEN + strlen(MACP) + MAC_LEN;
+    char * mac_b64 = NULL;
     u8 * mac = NULL;
-    if (NULL == data) {
-        wpa_printf(MSG_DEBUG, "EAP-NOOB: Input arguments NULL for function %s",__func__);
+
+    if (!data) {
+        wpa_printf(MSG_DEBUG, "EAP-NOOB: Input arguments NULL for function %s", __func__);
         return NULL;
     }
-    wpa_printf(MSG_DEBUG, "EAP-NOOB: Entering %s", __func__);
-    mac = eap_noob_gen_MAC(data, MACP_TYPE, data->server_attr->kdf_out->Kmp, KMP_LEN, COMPLETION_EXCHANGE);
-    if (NULL == mac) goto EXIT;
-    err -= (FAILURE == eap_noob_Base64Encode(mac, MAC_LEN, &mac_b64));
-    err -= (NULL == (rsp_obj = json_object()));
-    err += json_object_set_new(rsp_obj, TYPE, json_integer(EAP_NOOB_TYPE_4));
-    err += json_object_set_new(rsp_obj, PEERID, json_string(data->server_attr->PeerId));
-    err += json_object_set_new(rsp_obj, MACP, json_string(mac_b64));
-    err -= (NULL == (resp_json = json_dumps(rsp_obj,JSON_COMPACT|JSON_PRESERVE_ORDER)));
-    if (err < 0) goto EXIT;
 
-    wpa_printf(MSG_DEBUG, "EAP-NOOB: Response %s = %d", resp_json, (int)strlen(resp_json));
-    len = strlen(resp_json)+1;
-    if (NULL == (resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB, len, EAP_CODE_RESPONSE, id))) {
-        wpa_printf(MSG_ERROR, "EAP-NOOB: Failed to allocate memory for Response/NOOB-IE"); goto EXIT;
+    wpa_printf(MSG_DEBUG, "EAP-NOOB: Entering %s", __func__);
+
+    mac = eap_noob_gen_MAC(data, MACP_TYPE, data->server_attr->kdf_out->Kmp,
+            KMP_LEN, COMPLETION_EXCHANGE);
+    if (!mac) {
+        goto EXIT;
     }
-    wpabuf_put_data(resp,resp_json,len);
+
+    if (FAILURE == eap_noob_Base64Encode(mac, MAC_LEN, &mac_b64)) {
+        goto EXIT;
+    }
+
+    json = wpabuf_alloc(len);
+    if (!json) {
+        goto EXIT;
+    }
+
+    json_start_object(json, NULL);
+    json_add_int(json, TYPE, EAP_NOOB_TYPE_4);
+    json_value_sep(json);
+    json_add_string(json, PEERID, data->server_attr->PeerId);
+    json_value_sep(json);
+    json_add_string(json, MACP, mac_b64);
+    json_end_object(json);
+
+    resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB, len, EAP_CODE_RESPONSE, id);
+    if (!resp) {
+        wpa_printf(MSG_DEBUG, "EAP-NOOB: Failed to allocate memory for Completion Response");
+        goto EXIT;
+    }
+
+    wpabuf_put_buf(resp, json);
 EXIT:
-    EAP_NOOB_FREE(resp_json);
+    wpabuf_free(json);
     EAP_NOOB_FREE(mac_b64);
-    json_decref(rsp_obj);
     return resp;
 }
 
@@ -1268,32 +1314,36 @@ EXIT:
 **/
 static struct wpabuf * eap_noob_rsp_type_three(const struct eap_noob_peer_context *data, u8 id)
 {
+    struct wpabuf * json = NULL;
     struct wpabuf * resp = NULL;
-    char * resp_json = NULL;
-    json_t * rsp_obj = NULL;
-    size_t len = 0; int err = 0;
+    size_t len = 100 + strlen(TYPE) + strlen(PEERID) + MAX_PEER_ID_LEN;
 
     wpa_printf(MSG_DEBUG, "EAP-NOOB: OOB BUILD RESP TYPE 3");
     if (NULL == data) {
         wpa_printf(MSG_DEBUG, "EAP-NOOB: Input arguments NULL for function %s",__func__);
-        return NULL;
-    }
-
-    err -= (NULL == (rsp_obj = json_object()));
-    err += json_object_set_new(rsp_obj, TYPE, json_integer(EAP_NOOB_TYPE_3));
-    err += json_object_set_new(rsp_obj, PEERID, json_string(data->peer_attr->PeerId));
-    err -= (NULL == (resp_json = json_dumps(rsp_obj, JSON_COMPACT|JSON_PRESERVE_ORDER)));
-    if (err < 0) goto EXIT;
-    len = strlen(resp_json)+1;
-    err -= (NULL == (resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB, len, EAP_CODE_RESPONSE, id)));
-    if (err < 0) {
-        wpa_printf(MSG_ERROR, "EAP-NOOB: Failed to allocate memory for Response/NOOB-IE");
         goto EXIT;
     }
-    wpabuf_put_data(resp,resp_json,len);
+
+    json = wpabuf_alloc(len);
+    if (!json) {
+        goto EXIT;
+    }
+
+    json_start_object(json, NULL);
+    json_add_int(json, TYPE, EAP_NOOB_TYPE_9);
+    json_value_sep(json);
+    json_add_string(json, PEERID, data->peer_attr->PeerId);
+    json_end_object(json);
+
+    resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB, len, EAP_CODE_RESPONSE, id);
+    if (resp == NULL) {
+        wpa_printf(MSG_DEBUG, "EAP-NOOB: Failed to allocate memory for Response/NOOB-WE");
+        goto EXIT;
+    }
+    
+    wpabuf_put_buf(resp, json);
 EXIT:
-    EAP_NOOB_FREE(resp_json);
-    json_decref(rsp_obj);
+    wpabuf_free(json);
     return resp;
 }
 
@@ -1411,39 +1461,45 @@ EXIT:
 **/
 static struct wpabuf * eap_noob_rsp_type_one(struct eap_sm *sm,const struct eap_noob_peer_context *data, u8 id)
 {
-    json_t * rsp_obj = NULL;
-    struct wpabuf *resp = NULL;
-    char * resp_json = NULL;
-    size_t len = 0; int err = 0;
+    struct wpabuf * json = NULL;
+    struct wpabuf * resp = NULL;
+    size_t len = 100 + strlen(TYPE) + strlen(VERP) + strlen(PEERID) + MAX_PEER_ID_LEN
+        + strlen(CRYPTOSUITEP) + strlen(DIRP) + strlen(PEERINFO) + MAX_INFO_LEN;
 
-    if (NULL == data) {
+    if (!data) {
         wpa_printf(MSG_DEBUG, "EAP-NOOB: Input arguments NULL for function %s",__func__);
-        return NULL;
-    }
-    err -= (NULL == (rsp_obj = json_object()));
-    err += json_object_set_new(rsp_obj,TYPE,json_integer(EAP_NOOB_TYPE_1));
-    err += json_object_set_new(rsp_obj,VERP,json_integer(data->peer_attr->version));
-    err += json_object_set_new(rsp_obj,PEERID,json_string(data->server_attr->PeerId));
-    err += json_object_set_new(rsp_obj,CRYPTOSUITEP,json_integer(data->peer_attr->cryptosuite));
-    err += json_object_set_new(rsp_obj,DIRP,json_integer(data->peer_attr->dir));
-    err += json_object_set(rsp_obj,PEERINFO,data->peer_attr->PeerInfo);
-    err -= (NULL == (resp_json = json_dumps(rsp_obj, JSON_COMPACT|JSON_PRESERVE_ORDER)));
-    if (err < 0) {
-        wpa_printf(MSG_ERROR, "EAP-NOOB: error while generating json response for message type 1");
         goto EXIT;
     }
 
-    len = strlen(resp_json)+1;
-    wpa_printf(MSG_DEBUG, "EAP-NOOB: RESPONSE = %s = %d", resp_json, (int)strlen(resp_json));
-    if (NULL == (resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB,len , EAP_CODE_RESPONSE, id))) {
-        wpa_printf(MSG_ERROR, "EAP-NOOB: Failed to allocate memory for Response/NOOB-IE"); return NULL;
+    json = wpabuf_alloc(len);
+    if (!json) {
+        goto EXIT;
     }
-    wpabuf_put_data(resp,resp_json,len);
+
+    json_start_object(json, NULL);
+    json_add_int(json, TYPE, EAP_NOOB_TYPE_1);
+    json_value_sep(json);
+    json_add_int(json, VERP, data->peer_attr->version);
+    json_value_sep(json);
+    json_add_string(json, PEERID, data->server_attr->Peerid);
+    json_value_sep(json);
+    json_add_int(json, CRYPTOSUITEP, data->peer_attr->cryptosuite);
+    json_value_sep(json);
+    json_add_int(json, DIRP, data->peer_attr->dir);
+    json_value_sep(json);
+    json_add_string(json, PEERINFO, data->peer_attr->PeerInfo);
+    json_end_object(json);
+
+    resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB, len, EAP_CODE_RESPONSE, id);
+    if (!resp) {
+        wpa_printf(MSG_ERROR, "EAP-NOOB: Failed to allocate memory for Response/NOOB-IE");
+        goto EXIT;
+    }
+
+    wpabuf_put_buf(resp, json);
 EXIT:
-    json_decref(rsp_obj);
-    EAP_NOOB_FREE(resp_json);
+    wpabuf_free(json);
     return resp;
-}
 
 static struct wpabuf * eap_noob_rsp_type_eight(const struct eap_noob_peer_context * data, u8 id)
 {
