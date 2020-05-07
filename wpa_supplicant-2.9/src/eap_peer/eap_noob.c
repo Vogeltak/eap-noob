@@ -417,20 +417,28 @@ static int eap_noob_encode_vers_cryptosuites(struct eap_noob_peer_context * data
 static void eap_noob_decode_vers_cryptosuites(struct eap_noob_peer_context * data,
         const char * Vers, const char * Cryptosuites)
 {
-    json_t * Vers_obj, * Cryptosuites_obj, * value;
-    json_error_t  error;
-    int err = 0; size_t indx;
+    struct json_token * vers_obj = json_parse(Vers);
+    struct json_token * cryptosuites_obj = json_parse(Cryptosuites);
 
-    err -= (NULL == (Vers_obj = json_loads(Vers, JSON_COMPACT|JSON_PRESERVE_ORDER, &error)));
-    err -= (NULL == (Cryptosuites_obj = json_loads(Cryptosuites, JSON_COMPACT|JSON_PRESERVE_ORDER, &error)));
-    if (err < 0) {
-        wpa_printf(MSG_DEBUG, "EAP-NOOB: Unexpected error in allocating json objects");
-        return;
+    struct json_token * child = vers_obj->child;
+    int i = 0;
+
+    // Populate the version array
+    while (child) {
+        data->server_attr->version[i] = child->number;
+        child = child->sibling;
+        i++;
     }
-    json_array_foreach(Vers_obj, indx, value)
-        data->server_attr->version[indx] = json_integer_value(value);
-    json_array_foreach(Cryptosuites_obj, indx, value)
-        data->server_attr->cryptosuite[indx] = json_integer_value(value);
+
+    child = cryptosuites_obj->child;
+    i = 0;
+    
+    // Populate the cryptosuite array
+    while (child) {
+        data->server_attr->cryptosuite[i] = child->number;
+        child = child->sibling;
+        i++;
+    }
 }
 
 
