@@ -395,23 +395,32 @@ EXIT:
 }
 
 static int eap_noob_encode_vers_cryptosuites(struct eap_noob_peer_context * data,
-        json_t ** Vers, json_t ** Cryptosuites)
+        char ** Vers, char ** Cryptosuites)
 {
-    int err = 0;
-    if (NULL == Vers || NULL == Cryptosuites) return FAILURE;
-    err -= (NULL == (*Vers = json_array()));
-    for (int i = 0; i < MAX_SUP_VER; ++i) {
-        err += json_array_append_new(*Vers, json_integer(data->server_attr->version[i]));
+    struct wpabuf * vers = wpabuf_alloc(100); 
+    struct wpabuf * cryptosuites = wpabuf_alloc(100); 
+
+    if (!vers || !cryptosuites) {
+        wpa_printf(MSG_DEBUG, "EAP-NOOB: JSON allocation for Vers and Cryptosuites failed");
+        return FAILURE;
     }
 
-    err -= (NULL == (*Cryptosuites = json_array()));
-    for (int i = 0; i < MAX_SUP_CSUITES ; i++) {
-        err += json_array_append_new(*Cryptosuites, json_integer(data->server_attr->cryptosuite[i]));
+    // Populate the vers array
+    json_start_array(vers, NULL);
+    for (int i = 0; i < MAX_SUP_VER; i++) { 
+        wpabuf_printf(vers, "%s%u", i ? "," : "", data->server_attr->version[i]);
     }
-    if (err < 0) {
-        json_decref(*Vers); json_decref(*Cryptosuites); return FAILURE;
+    json_end_array(vers);
+
+    // Populate the cryptosuites array
+    json_start_array(cryptosuites, NULL);
+    for (int i = 0; i < MAX_SUP_CSUITES; i++) {
+        wpabuf_printf(cryptosuites, "%s%u", i ? "," : "", data->server_attr->cryptosuite[i]);
     }
-    return SUCCESS;
+
+    // Duplicate strings to output pointers
+    *Vers = strndup(wpabuf_head(vers), wpabuf_len(vers));
+    *Cryptosuites = strndup(wpabuf_head(cryptosuites), wpabuf_len(cryptosuites));
 }
 
 static void eap_noob_decode_vers_cryptosuites(struct eap_noob_peer_context * data,
@@ -872,6 +881,65 @@ static void  eap_noob_decode_obj(struct eap_noob_server_data * data, json_t * re
     eap_noob_verify_param_len(data);
 }
 
+static void eap_noob_decode_obj(struct eap_noob_server_data * data, struct json_token * root)
+{
+    if (!data || !root) {
+        wpa_printf(MSG_DEBUG, "EAP-NOOB: Input arguments NULL for function %s", __func__);
+        goto EXIT;
+    }
+
+    if (root->type != JSON_OBJECT) {
+        wpa_printf(MSG_DEBUG, "EAP-NOOB: Request data does not have a JSON object as root");
+        goto EXIT;
+    }
+
+    wpa_printf(MSG_DEBUG, "EAP-NOOB: Entering %s", __func__);
+
+    // Loop over all children of the JSON root object
+    struct json_token * child = root->child;
+    while (child) {
+        switch (child->type) {
+            char * key = child->name;
+
+            case JSON_OBJECT:
+                // Pks or Pks2
+                if (!os_strcmp(key, PKS) || !os_strcmp(key, PKS2)) {
+                    // Copy json object, because child will eventually be freed.
+                    memcpy(&data->ecdh_exchange_data->jwk_serv, &child, sizeof(child));
+
+                    if (!data->ecdh_exchange_data->jwk_serv) {
+                        data->err_code = E1003;
+                        goto EXIT;
+                    }
+
+                    data->rcvd_params |= PKEY_RCVD;
+                }
+                // ServerInfo
+                else if (!os_strcmp(key, SERVERINFO)) {
+                    // TODO: dump json_token to string and store in data->server_info
+                    
+                    data->rcvd_params |= INFO_RCVD;
+                }
+                break;
+            case JSON_ARRAY:
+                break;
+            case JSON_STRING:
+                break;
+            case JSON_NUMBER:
+                break;
+            default:
+                ;
+        }
+
+        // Done handling this child,
+        // now update the reference to the next child of the JSON root object
+        child = child->sibling;
+    }
+EXIT:
+    // Free stuff
+    return;
+}
+
 /**
  * eap_noob_assign_waittime : assign time fow which the SSID should be disabled.
  * @sm : eap state machine context
@@ -1131,8 +1199,7 @@ static int eap_noob_db_update(struct eap_noob_peer_context * data, u8 type)
 static int eap_noob_db_update_initial_exchange_info(struct eap_sm * sm, struct eap_noob_peer_context * data)
 {
     struct wpa_supplicant * wpa_s = NULL;
-    char query[MAX_QUERY_LEN] = {0}, * Vers_str, * Cryptosuites_str;
-    json_t * Vers = NULL, * Cryptosuites = NULL;
+    char query[MAX_QUERY_LEN] = {0}, * Vers, * Cryptosuites;
     int ret = 0, err = 0;
 
     if (NULL == data || NULL == sm) {
@@ -1144,8 +1211,6 @@ static int eap_noob_db_update_initial_exchange_info(struct eap_sm * sm, struct e
     err -= (NULL == (data->server_attr->mac_input_str = json_dumps(data->server_attr->mac_input, JSON_COMPACT|JSON_PRESERVE_ORDER)));
     if (data->server_attr->mac_input)
         wpa_printf(MSG_DEBUG, "EAP-NOOB: MAC str %s", data->server_attr->mac_input_str);
-    err -= (NULL == (Vers_str = json_dumps(Vers, JSON_COMPACT)));
-    err -= (NULL == (Cryptosuites_str = json_dumps(Cryptosuites, JSON_COMPACT|JSON_PRESERVE_ORDER)));
     if (err < 0) { ret = FAILURE; goto EXIT; }
 
     snprintf(query, MAX_QUERY_LEN,"INSERT INTO EphemeralState (Ssid, PeerId, Vers, Cryptosuites, Realm, Dirs, "
@@ -1162,15 +1227,13 @@ static int eap_noob_db_update_initial_exchange_info(struct eap_sm * sm, struct e
     }
 EXIT:
     wpa_printf(MSG_DEBUG, "EAP-NOOB: Exiting %s",__func__);
-    EAP_NOOB_FREE(Vers_str); EAP_NOOB_FREE(Cryptosuites_str);
-    json_decref(Vers); json_decref(Cryptosuites);
+    EAP_NOOB_FREE(Vers); EAP_NOOB_FREE(Cryptosuites);
     return ret;
 }
 
 static int eap_noob_update_persistentstate(struct eap_noob_peer_context * data)
 {
-    char query[MAX_QUERY_LEN] = {0}, * Vers_str, * Cryptosuites_str;
-    json_t * Vers = NULL, * Cryptosuites = NULL;
+    char query[MAX_QUERY_LEN] = {0}, * Vers, * Cryptosuites;
     int ret = SUCCESS, err = 0;
 
     if (NULL == data) { wpa_printf(MSG_DEBUG, "EAP-NOOB: Input to %s is null", __func__); return FAILURE; }
@@ -1178,8 +1241,6 @@ static int eap_noob_update_persistentstate(struct eap_noob_peer_context * data)
 
     err -= (FAILURE == eap_noob_db_statements(data->peer_db, DELETE_EPHEMERAL_FOR_ALL));
     err -= (FAILURE == eap_noob_encode_vers_cryptosuites(data, &Vers, &Cryptosuites));
-    err -= (NULL == (Vers_str = json_dumps(Vers, JSON_COMPACT|JSON_PRESERVE_ORDER)));
-    err -= (NULL == (Cryptosuites_str = json_dumps(Cryptosuites, JSON_COMPACT|JSON_PRESERVE_ORDER)));
     if (err < 0) { ret = FAILURE; goto EXIT; }
     /* snprintf(query, MAX_QUERY_LEN, "INSERT INTO PersistentState (Ssid, PeerId, Vers, Cryptosuites, Realm, Kz, "
         "creation_time, last_used_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"); */
@@ -1200,8 +1261,7 @@ static int eap_noob_update_persistentstate(struct eap_noob_peer_context * data)
     if (err < 0) { ret = FAILURE; goto EXIT; }
 EXIT:
     wpa_printf(MSG_DEBUG, "EAP-NOOB: Exiting %s, return %d",__func__, ret);
-    EAP_NOOB_FREE(Vers_str); EAP_NOOB_FREE(Cryptosuites_str);
-    json_decref(Vers); json_decref(Cryptosuites);
+    EAP_NOOB_FREE(Vers); EAP_NOOB_FREE(Cryptosuites);
     return ret;
 }
 
