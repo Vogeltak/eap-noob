@@ -604,9 +604,7 @@ static u8 * eap_noob_gen_MAC(const struct eap_noob_peer_context * data, int type
     if (type == RECONNECT_EXCHANGE) {
         wpabuf_printf(mac_json, ",\"\"");
     } else {
-        char * pks = json_dump(data->server_attr->jwk_serv);
-        wpabuf_printf(mac_json, ",%s", pks);
-        EAP_NOOB_FREE(pks);
+        wpabuf_printf(mac_json, ",%s", data->server_attr->jwk_serv);
     }
 
     // Server nonce
@@ -616,9 +614,7 @@ static u8 * eap_noob_gen_MAC(const struct eap_noob_peer_context * data, int type
     if (type == RECONNECT_EXCHANGE) {
         wpabuf_printf(mac_json, ",\"\"");
     } else {
-        char * pkp = json_dump(data->server_attr->jwk_peer);
-        wpabuf_printf(mac_json, ",%s", pkp);
-        EAP_NOOB_FREE(pkp);
+        wpabuf_printf(mac_json, ",%s", data->server_attr->jwk_peer);
     }
 
     // Peer nonce
@@ -969,9 +965,7 @@ static void eap_noob_decode_obj(struct eap_noob_server_data * data, struct json_
             case JSON_OBJECT:
                 // Pks or Pks2
                 if (!os_strcmp(key, PKS) || !os_strcmp(key, PKS2)) {
-                    // Copy json object, because child will eventually be freed.
-                    memcpy(&data->ecdh_exchange_data->jwk_serv, &child, sizeof(child));
-
+                    data->ecdh_exchange_data->jwk_serv = json_dump(child);
                     if (!data->ecdh_exchange_data->jwk_serv) {
                         data->err_code = E1003;
                         goto EXIT;
@@ -1396,7 +1390,7 @@ static int eap_noob_db_update_initial_exchange_info(struct eap_sm * sm, struct e
     wpa_printf(MSG_DEBUG, "EAP-NOOB: Entering %s",__func__);
     wpa_s = (struct wpa_supplicant *)sm->msg_ctx;
     err -= (FAILURE == eap_noob_encode_vers_cryptosuites(data, &Vers, &Cryptosuites));
-    err -= (NULL == (data->server_attr->mac_input_str = json_dumps(data->server_attr->mac_input, JSON_COMPACT|JSON_PRESERVE_ORDER)));
+    //err -= (NULL == (data->server_attr->mac_input_str = json_dumps(data->server_attr->mac_input, JSON_COMPACT|JSON_PRESERVE_ORDER)));
     if (data->server_attr->mac_input)
         wpa_printf(MSG_DEBUG, "EAP-NOOB: MAC str %s", data->server_attr->mac_input_str);
     if (err < 0) { ret = FAILURE; goto EXIT; }
@@ -1624,19 +1618,40 @@ EXIT:
  *  @y_64 : y co-ordinate in base64url format
  *  Returns : FAILURE/SUCCESS
 **/
-static int eap_noob_build_JWK( json_t ** jwk, const char * x_b64)
+static int eap_noob_build_JWK(char ** jwk, const char * x_b64)
 {
-    if (NULL == x_b64) {
-        wpa_printf(MSG_DEBUG, "EAP-NOOB: CO-ORDINATES are NULL!!"); return FAILURE;
+    struct wpabuf * json;
+    size_t len = 500; 
+
+    if (!x_b64) {
+        wpa_printf(MSG_DEBUG, "EAP-NOOB: X-coordinate is NULL when building JWK");
+        return FAILURE;
     }
 
-    if (NULL == ((*jwk) = json_object())) {
-        wpa_printf(MSG_DEBUG, "EAP-NOOB: Error in JWK"); return FAILURE;
+    json = wpabuf_alloc(len);
+    if (!json) {
+        wpa_printf(MSG_DEBUG, "EAP-NOOB: Failed to allocate memory while building JWK");
+        return FAILURE;
     }
-    json_object_set_new((*jwk), KEY_TYPE, json_string("EC"));
-    json_object_set_new((*jwk), CURVE, json_string("Curve25519"));
-    json_object_set_new((*jwk), X_COORDINATE, json_string(x_b64));
-    wpa_printf(MSG_DEBUG, "JWK Key %s",json_dumps((*jwk),JSON_COMPACT|JSON_PRESERVE_ORDER));
+
+    json_start_object(json, NULL);
+    json_add_string(json, KEY_TYPE, "EC");
+    json_value_sep(json);
+    json_add_string(json, CURVE, "Curve25519");
+    json_value_sep(json);
+    json_add_string(json, X_COORDINATE, x_b64);
+
+    *jwk = strndup(wpabuf_head(json), wpabuf_len(json));
+    if (!*jwk) {
+        wpa_printf(MSG_DEBUG, "EAP-NOOB: Failed to copy JWK");
+        wpabuf_free(json);
+        return FAILURE;
+    }
+
+    wpabuf_free(json);
+
+    wpa_printf(MSG_DEBUG, "EAP-NOOB: JWK key is %s", *jwk);
+
     return SUCCESS;
 }
 

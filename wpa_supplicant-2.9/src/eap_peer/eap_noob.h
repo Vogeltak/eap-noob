@@ -273,8 +273,8 @@ struct eap_noob_ecdh_key_exchange {
     char * y_b64;
     size_t y_len;
 
-    json_token * jwk_serv;
-    json_token * jwk_peer;
+    char * jwk_serv;
+    char * jwk_peer;
 
     u8 * shared_key;
     char * shared_key_b64;
