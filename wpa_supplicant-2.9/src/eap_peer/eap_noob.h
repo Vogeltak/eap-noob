@@ -28,6 +28,7 @@
 #define MAX_PEER_ID_LEN         22
 #define MAX_CONF_LEN            500
 #define MAX_INFO_LEN            500
+#define MAX_MAC_INPUT_LEN       1500
 
 #define KDF_LEN                 320
 #define MSK_LEN                 64
@@ -323,7 +324,7 @@ struct eap_noob_peer_data {
     u32 config_params;
 
     char * PeerId;
-    json_t * PeerInfo;
+    char * PeerInfo;
     char * MAC;
     char * Realm;
 

@@ -501,7 +501,7 @@ static void columns_ephemeralnoob(struct eap_noob_peer_context * data, sqlite3_s
 }
 
 /**
- * eap_noob_gen_MAC : generate a HMAC for user authentication.
+ * eap_noob_gen_MAC : generate an HMAC for user authentication.
  * @data : peer context
  * type  : MAC type
  * @key  : key to generate MAC
@@ -510,43 +510,151 @@ static void columns_ephemeralnoob(struct eap_noob_peer_context * data, sqlite3_s
  **/
 static u8 * eap_noob_gen_MAC(const struct eap_noob_peer_context * data, int type, u8 * key, int keylen, int state)
 {
-    u8 * mac = NULL; int err = 0;
-    json_t * mac_array, * emptystr = json_string(""); json_error_t error;
-    char * mac_str = os_zalloc(500);
+    u8 * mac = NULL;
+    struct wpabuf * mac_json;
+    char * mac_str;
 
-    if(state == RECONNECT_EXCHANGE) {
-        data->server_attr->mac_input_str = json_dumps(data->server_attr->mac_input, JSON_COMPACT|JSON_PRESERVE_ORDER);
+    // TODO: Verify that all required information exists
+
+    // Allocate memory to the JSON string to be built
+    mac_json = wpabuf_alloc(MAX_MAC_INPUT_LEN);
+    if (!mac_json) {
+        wpa_printf(MSG_DEBUG, "EAP-NOOB: Failed to allocate memory for MAC JSON");
+        return NULL;
     }
 
-    if (NULL == data || NULL == data->server_attr || NULL == data->server_attr->mac_input_str ||
-        NULL == key) return NULL;
+    // Build the MAC input string from all components as specified in draft 8 
+    // https://tools.ietf.org/html/draft-ietf-emu-eap-noob-00 
+    json_start_array(mac_json, NULL);
 
-    err -= (NULL == (mac_array = json_loads(data->server_attr->mac_input_str, JSON_COMPACT|JSON_PRESERVE_ORDER, &error)));
-    if (type == MACS_TYPE)
-        err += json_array_set_new(mac_array, 0, json_integer(2));    
-    else
-        err += json_array_set_new(mac_array, 0, json_integer(1));
+    // Integer to indicate whether this MAC is from the server or the peer
+    if (type == MACS_TYPE) {
+        wpabuf_printf(mac_json, "%u", 2);
+    } else {
+        wpabuf_printf(mac_json, "%u", 1);
+    }
+
+    // Versions supported by server
+    json_value_sep(mac_json);
+    json_start_array(mac_json, NULL);
+    for (int i = 0; i < MAX_SUP_VER; i++) {
+        wpabuf_printf(mac_json, "%s%u", i ? "," : "", data->server_attr->version[i]);
+    }
+
+    // Version chosen by peer
+    wpabuf_printf(mac_json, ",%u", data->peer_attr->version);
+
+    // PeerId assigned by the server to the peer
+    wpabuf_printf(mac_json, ",\"%s\"", data->peer_attr->PeerId);
+
+    // Cryptosuites supported by the server
+    json_value_sep(mac_json);
+    json_start_array(mac_json, NULL);
+    for (int i = 0; i < MAX_SUP_CSUITES; i++) {
+        wpabuf_printf(mac_json, "%s%u", i ? "," : "", data->server_attr->cryptosuite[i]);
+    }
+
+    // Direction supported by the server
+    if (type == RECONNECT_EXCHANGE) {
+        wpabuf_printf(mac_json, ",\"\"");
+    } else {
+        wpabuf_printf(mac_json, ",%u", data->server_attr->dir);
+    }
+
+    // Server info object
+    if (type == RECONNECT_EXCHANGE) {
+        wpabuf_printf(mac_json, ",\"\"");
+    } else {
+        wpabuf_printf(mac_json, ",%s", data->server_attr->server_info);
+    }
+
+    // Cryptosuite chosen by peer
+    wpabuf_printf(mac_json, ",%u", data->peer_attr->cryptosuite);
+
+    // Direction supported by the peer
+    if (type == RECONNECT_EXCHANGE) {
+        wpabuf_printf(mac_json, ",\"\"");
+    } else {
+        wpabuf_printf(mac_json, ",%u", data->peer_attr->dir);
+    }
+
+    // If the Realm is specified, include it
+    // Otherwise, insert an empty string
+    if (data->server_attr->Realm) {
+        wpabuf_printf(mac_json, ",\"%s\"", data->server_attr->Realm);
+    } else {
+        wpabuf_printf(mac_json, ",\"\"");
+    }
+
+    // Peer info object
+    if (type == RECONNECT_EXCHANGE) {
+        wpabuf_printf(mac_json, ",\"\"");
+    } else {
+        wpabuf_printf(mac_json, ",%s", data->peer_attr->PeerInfo);
+    }
+
+    // KeyingMode
+    if (type == RECONNECT_EXCHANGE) {
+        // Include KeyingMode
+    } else {
+        wpabuf_printf(mac_json, ",0");
+    }
+
+    // Public key server
+    if (type == RECONNECT_EXCHANGE) {
+        wpabuf_printf(mac_json, ",\"\"");
+    } else {
+        char * pks = json_dump(data->server_attr->jwk_serv);
+        wpabuf_printf(mac_json, ",%s", pks);
+        EAP_NOOB_FREE(pks);
+    }
+
+    // Server nonce
+    wpabuf_printf(mac_json, ",\"%s\"", data->server_attr->kdf_nonce_data->Ns);
+
+    // Public key peer
+    if (type == RECONNECT_EXCHANGE) {
+        wpabuf_printf(mac_json, ",\"\"");
+    } else {
+        char * pkp = json_dump(data->server_attr->jwk_peer);
+        wpabuf_printf(mac_json, ",%s", pkp);
+        EAP_NOOB_FREE(pkp);
+    }
+
+    // Peer nonce
+    wpabuf_printf(mac_json, ",\"%s\"", data->server_attr->kdf_nonce_data->Np);
     
-    if(state == RECONNECT_EXCHANGE) {
-        err += json_array_append_new(mac_array, emptystr);
-    }
-    else {
-        err += json_array_append_new(mac_array, json_string(data->server_attr->oob_data->Noob_b64));
+    // Nonce out of band
+    if (type == RECONNECT_EXCHANGE) {
+        wpabuf_printf(mac_json, ",\"\"");
+    } else {
+        wpabuf_printf(mac_json, ",\"%s\"", data->server_attr->oob_data->Noob_b64);
     }
 
-    err -= (NULL == (mac_str = json_dumps(mac_array, JSON_COMPACT|JSON_PRESERVE_ORDER)));
-    if (err < 0) wpa_printf(MSG_DEBUG, "EAP-NOOB: Unexpected error in setting MAC");
+    json_end_array(mac_json);
 
-    wpa_printf(MSG_DEBUG, "EAP-NOOB: Func (%s), MAC len = %d, MAC = %s", __func__, (int)os_strlen(mac_str),
-               mac_str);
-    wpa_hexdump_ascii(MSG_DEBUG, "EAP-NOOB: Key:", key, keylen);
-    mac = HMAC(EVP_sha256(), key, keylen, (u8 *)mac_str,
-            os_strlen(mac_str), NULL, NULL);
-    wpa_hexdump_ascii(MSG_DEBUG, "EAP-NOOB: MAC",mac,32);
-    os_free(mac_str);
+    // Dump to string
+    data->server_attr->mac_input_str = strndup(wpabuf_head(mac_json), wpabuf_len(mac_json));
+    if (!data->server_attr->mac_input_str) {
+        wpa_printf(MSG_ERROR, "EAP-NOOB: Failed to copy MAC input string");
+        return NULL;
+    }
+
+    json_free(mac_json);
+
+    wpa_printf(MSG_DEBUG, "EAP-NOOB: In %s: MAC=%s, length=%d", __func__,
+            data->server_attr->mac_input_str,
+            (int) os_strlen(data->server_attr->mac_input_str));
+
+    // Calculate MAC
+    mac = HMAC(EVP_sha256(), key, keylen,
+            (u8 *) data->server_attr->mac_input_str,
+            os_strlen(data->server_attr->mac_input_str), NULL, NULL);
+
+    wpa_hexdump_ascii(MSG_DEBUG, "EAP-NOOB: Generated MAC", mac, MAC_LEN);
+
     return mac;
 }
-
 
 static int eap_noob_derive_secret(struct eap_noob_peer_context * data, size_t * secret_len)
 {
@@ -806,6 +914,27 @@ static void json_token_to_string(struct wpabuf * json, struct json_token * token
         sibling = sibling->sibling;
         element_nr++;
     }
+}
+
+/**
+ * Wrapper function that dumps a json_token to a string.
+ * @token: the token to be dumped
+ * Returns: a string representation of the token
+ */
+static char * json_dump(struct json_token * token) {
+    struct wpabuf * dump = wpabuf_alloc(10000);
+    if (!dump) {
+        wpa_printf(MSG_DEBUG, "EAP-NOOB: Failed to allocate memory in %s", __func__);
+        return NULL;
+    }
+
+    json_token_to_string(dump, token);
+
+    char * str = strndup(wpabuf_head(dump), wpabuf_len(dump));
+
+    wpabuf_free(dump);
+
+    return str;
 }
 
 /**
