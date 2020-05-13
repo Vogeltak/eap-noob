@@ -1949,56 +1949,59 @@ EXIT:
 **/
 static struct wpabuf * eap_noob_rsp_type_six(struct eap_noob_peer_context * data, u8 id)
 {
-    json_t * rsp_obj = NULL;
-    struct wpabuf *resp = NULL;
-    char * resp_json = NULL, * Np_b64 = NULL, * Ns_b64;
-    unsigned long error;
-    size_t len = 0; int err = 0, rc;
+    struct wpabuf * json = NULL;
+    struct wpabuf * resp = NULL;
+    size_t len = 100 + strlen(TYPE) + strlen(PEERID) + MAX_PEER_ID_LEN
+        + strlen(NP) + NONCE_LEN * 1.5;
+    char * Np_b64;
 
-    if (NULL == data) {
-        wpa_printf(MSG_DEBUG, "EAP-NOOB: Input arguments NULL for function %s",__func__);
-        return NULL;
+    if (!data) {
+        wpa_printf(MSG_DEBUG, "EAP-NOOB: Input arguments NULL for function %s", __func__);
+        goto EXIT;
     }
-    wpa_printf(MSG_DEBUG, "EAP-NOOB: OOB BUILD RESP TYPE 6");
 
+    wpa_printf(MSG_DEBUG, "EAP-NOOB: Entering %s", __func__);
+
+    // Generate peer nonce
     data->server_attr->kdf_nonce_data->Np = os_zalloc(NONCE_LEN);
-    rc = RAND_bytes(data->server_attr->kdf_nonce_data->Np, NONCE_LEN);
-    error = ERR_get_error();
-    if (rc != 1) {
-        wpa_printf(MSG_DEBUG, "EAP-NOOB: Failed to generate nonce Error Code = %lu", error);
+    int rc = RAND_bytes(data->server_attr->kdf_nonce_data->Np, NONCE_LEN);
+    unsigned long error = ERR_get_error();
+    if (rc != SUCCESS) {
+        wpa_printf(MSG_DEBUG, "EAP-NOOB: Failed to generate nonce. Error=%lu", error);
         os_free(data->server_attr->kdf_nonce_data->Np);
-        return NULL;
+        goto EXIT;
     }
 
-    wpa_hexdump_ascii(MSG_DEBUG, "EAP-NOOB: Nonce", data->server_attr->kdf_nonce_data->Np, NONCE_LEN);
+    // Encode the nonce in base 64
     eap_noob_Base64Encode(data->server_attr->kdf_nonce_data->Np, NONCE_LEN, &Np_b64);
-    err -= (NULL == (rsp_obj = json_object()));
-    err += json_object_set_new(rsp_obj,TYPE,json_integer(EAP_NOOB_TYPE_6));
-    err += json_object_set_new(rsp_obj,PEERID,json_string(data->peer_attr->PeerId));
-    err += json_object_set_new(rsp_obj,NP2,json_string(Np_b64));
-    err -= (NULL == (resp_json = json_dumps(rsp_obj, JSON_COMPACT|JSON_PRESERVE_ORDER)));
-    if (err < 0 ) goto EXIT;
+    wpa_printf(MSG_DEBUG, "EAP-NOOB: Nonce %s", Np_b64);
 
-    len = strlen(resp_json)+1; wpa_printf(MSG_DEBUG, "EAP-NOOB: Json %s", resp_json);
-    if (NULL == (resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB,len , EAP_CODE_RESPONSE, id))) {
-        wpa_printf(MSG_ERROR, "EAP-NOOB: Failed to allocate memory for Response/NOOB-IE"); goto EXIT;
+    // Create JSON EAP message
+
+    json = wpabuf_alloc(len);
+    if (!json) {
+        wpa_printf(MSG_DEBUG, "EAP-NOOB: Failed to allocate memory for json response");
+        goto EXIT;
     }
-    wpabuf_put_data(resp,resp_json,len);
-    eap_noob_Base64Encode(data->server_attr->kdf_nonce_data->Ns, NONCE_LEN, &Ns_b64);
-    err -= (NULL == Ns_b64);
-    err += json_array_set(data->server_attr->mac_input, 10, data->peer_attr->PeerInfo);
-    //err += json_array_set(data->server_attr->mac_input, 11, data->server_attr->ecdh_exchange_data->jwk_serv);
-    err += json_array_set_new(data->server_attr->mac_input, 12, json_string(Ns_b64));
-    //err += json_array_set(data->server_attr->mac_input, 13, data->server_attr->ecdh_exchange_data->jwk_peer);
-    err += json_array_set_new(data->server_attr->mac_input, 14, json_string(Np_b64));
-    if (err < 0) wpa_printf(MSG_DEBUG, "EAP-NOOB: Unexpected error in setting MAC input values");
+
+    json_start_object(json, NULL);
+    json_add_int(json, TYPE, EAP_NOOB_TYPE_6);
+    json_value_sep(json);
+    json_add_string(json, PEERID, data->peer_attr->PeerId);
+    json_value_sep(json);
+    json_add_string(json, NP2, Np_b64);
+    json_end_object(json);
+
+    resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB, len, EAP_CODE_RESPONSE, id);
+    if (!resp) {
+        wpa_printf(MSG_DEBUG, "EAP-NOOB: Failed to allocate memory for Response/RE");
+        goto EXIT;
+    }
+
+    wpabuf_put_buf(resp, json);
 EXIT:
-    json_decref(rsp_obj); EAP_NOOB_FREE(resp_json);
-    EAP_NOOB_FREE(Np_b64); EAP_NOOB_FREE(Ns_b64);
-    if (err < 0) {
-        wpabuf_free(resp);
-        return NULL;
-    }
+    wpabuf_free(json);
+    EAP_NOOB_FREE(Np_b64);
     return resp;
 }
 
