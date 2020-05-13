@@ -1394,7 +1394,7 @@ static int eap_noob_db_update_initial_exchange_info(struct eap_sm * sm, struct e
     wpa_s = (struct wpa_supplicant *)sm->msg_ctx;
     err -= (FAILURE == eap_noob_encode_vers_cryptosuites(data, &Vers, &Cryptosuites));
     //err -= (NULL == (data->server_attr->mac_input_str = json_dumps(data->server_attr->mac_input, JSON_COMPACT|JSON_PRESERVE_ORDER)));
-    if (data->server_attr->mac_input)
+    if (data->server_attr->mac_input_str)
         wpa_printf(MSG_DEBUG, "EAP-NOOB: MAC str %s", data->server_attr->mac_input_str);
     if (err < 0) { ret = FAILURE; goto EXIT; }
 
@@ -2433,7 +2433,6 @@ static struct wpabuf * eap_noob_process(struct eap_sm * sm, void * priv, struct 
     size_t len;
     struct json_token * req_obj = NULL;
     struct json_token * req_type = NULL;
-    struct json_token * error;
     int msgtype;
     u8 id =0;
 
@@ -2577,7 +2576,6 @@ static void eap_noob_free_ctx(struct eap_noob_peer_context * data)
         EAP_NOOB_FREE(serv->ssid);
         EAP_NOOB_FREE(serv->PeerId);
         EAP_NOOB_FREE(serv->Realm);
-        json_decref(serv->mac_input);
         EAP_NOOB_FREE(serv->mac_input_str);
 
         if (serv->ecdh_exchange_data) {
@@ -2586,8 +2584,8 @@ static void eap_noob_free_ctx(struct eap_noob_peer_context * data)
             EAP_NOOB_FREE(serv->ecdh_exchange_data->y_serv_b64);
             EAP_NOOB_FREE(serv->ecdh_exchange_data->x_b64);
             EAP_NOOB_FREE(serv->ecdh_exchange_data->y_b64);
-            json_decref(serv->ecdh_exchange_data->jwk_serv);
-            json_decref(serv->ecdh_exchange_data->jwk_peer);
+            EAP_NOOB_FREE(serv->ecdh_exchange_data->jwk_serv);
+            EAP_NOOB_FREE(serv->ecdh_exchange_data->jwk_peer);
             EAP_NOOB_FREE(serv->ecdh_exchange_data->shared_key);
             EAP_NOOB_FREE(serv->ecdh_exchange_data->shared_key_b64);
             os_free(serv->ecdh_exchange_data);
@@ -2619,7 +2617,7 @@ static void eap_noob_free_ctx(struct eap_noob_peer_context * data)
     if (peer) {
         wpa_printf(MSG_DEBUG, "EAP_NOOB: Clearing peer data");
         EAP_NOOB_FREE(peer->PeerId);
-        json_decref(peer->PeerInfo);
+        EAP_NOOB_FREE(peer->PeerInfo);
         EAP_NOOB_FREE(peer->MAC);
         EAP_NOOB_FREE(peer->Realm);
         if (peer->peer_config_params) {
@@ -2869,8 +2867,7 @@ static int eap_noob_read_config(struct eap_sm *sm,struct eap_noob_peer_context *
         return FAILURE;
 
     if (NULL != (data->peer_attr->PeerInfo = eap_noob_prepare_peer_info_string(sm, data->peer_attr->peer_config_params))) {
-            PeerInfo_str =  json_dumps(data->peer_attr->PeerInfo, JSON_COMPACT|JSON_PRESERVE_ORDER);
-            if (NULL == PeerInfo_str || os_strlen(PeerInfo_str) > MAX_INFO_LEN) {
+            if (!data->peer_attr->PeerInfo || os_strlen(data->peer_attr->PeerInfo) > MAX_INFO_LEN) {
                 wpa_printf(MSG_ERROR, "EAP-NOOB: Incorrect or no peer info");
                 return FAILURE;
             }
