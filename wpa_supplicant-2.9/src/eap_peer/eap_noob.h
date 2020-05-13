@@ -79,6 +79,7 @@
 #define SERVERINFO              "ServerInfo"
 #define MACS                    "MACs"
 #define MACS2                   "MACs2"
+#define KEYINGMODE              "KeyingMode"
 
 #define HINT_PEER               "NoobId"
 #define HINT_SERV               "NoobId"
@@ -241,7 +242,7 @@ struct eap_noob_ecdh_kdf_out {
     u8 * msk;
     u8 * emsk;
     u8 * amsk;
-    u8 * MethodId;    
+    u8 * MethodId;
     u8 * Kms;
     u8 * Kmp;
     u8 * Kz;
@@ -288,6 +289,7 @@ struct eap_noob_server_data {
     u32 cryptosuite[MAX_SUP_CSUITES];
     u32 dir;
     u32 minsleep;
+    u32 keying_mode;
     u32 rcvd_params;
 
     char * server_info;
