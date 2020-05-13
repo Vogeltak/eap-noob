@@ -296,7 +296,6 @@ struct eap_noob_server_data {
     char * PeerId;
     char * Realm;
 
-    json_t * mac_input;
     char * mac_input_str;
 
     enum eap_noob_err_code err_code;
