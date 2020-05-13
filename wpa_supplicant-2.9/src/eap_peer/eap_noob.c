@@ -2065,23 +2065,18 @@ EXIT:
 /**
  * eap_noob_req_type_seven :  Decodes request type seven
  * @eap_sm : eap statemachine context
- * @req_obj : received request message object
  * @data : peer context
  * @id   : response message id
  * Returns : pointer to message buffer or null
 **/
-static struct wpabuf * eap_noob_req_type_seven(struct eap_sm * sm, json_t * req_obj, struct eap_noob_peer_context * data, u8 id)
+static struct wpabuf * eap_noob_req_type_seven(struct eap_sm * sm, struct eap_noob_peer_context * data, u8 id)
 {
     struct wpabuf * resp = NULL;
     u8 * mac = NULL;
 
     wpa_printf(MSG_DEBUG, "EAP-NOOB: Entering %s", __func__);
-    if (NULL == req_obj || NULL == data) {
+    if (!data) {
         wpa_printf(MSG_DEBUG, "EAP-NOOB: Input arguments NULL for function %s",__func__); return NULL;
-    }
-    eap_noob_decode_obj(data->server_attr, req_obj);
-    if (data->server_attr->err_code != NO_ERROR) {
-        resp = eap_noob_err_msg(data,id); return resp;
     }
     if (data->server_attr->rcvd_params != TYPE_SEVEN_PARAMS) {
         data->server_attr->err_code = E1002;
@@ -2115,26 +2110,19 @@ static struct wpabuf * eap_noob_req_type_seven(struct eap_sm * sm, json_t * req_
 /**
  * eap_noob_req_type_six :  Decodes request type six
  * @eap_sm : eap statemachine context
- * @req_obj : received request message object
  * @data : peer context
  * @id   : response message id
  * Returns : pointer to message buffer or null
 **/
-static struct wpabuf * eap_noob_req_type_six(struct eap_sm *sm, json_t * req_obj , struct eap_noob_peer_context *data, u8 id)
+static struct wpabuf * eap_noob_req_type_six(struct eap_sm *sm, struct eap_noob_peer_context *data, u8 id)
 {
     struct wpabuf * resp = NULL;
 
-    if (NULL == req_obj || NULL == data) {
+    if (!data) {
         wpa_printf(MSG_DEBUG, "EAP-NOOB: Input arguments NULL for function %s",__func__);
         return NULL;
     }
     wpa_printf(MSG_DEBUG, "EAP-NOOB: OOB PROCESS REQ TYPE 6");
-
-    eap_noob_decode_obj(data->server_attr,req_obj);
-    if (data->server_attr->err_code != NO_ERROR) {
-        resp = eap_noob_err_msg(data,id);
-        return resp;
-    }
 
     if (data->server_attr->rcvd_params != TYPE_SIX_PARAMS) {
         data->server_attr->err_code = E1002;
@@ -2153,31 +2141,24 @@ static struct wpabuf * eap_noob_req_type_six(struct eap_sm *sm, json_t * req_obj
 /**
  * eap_noob_req_type_five :  Decodes request type five
  * @eap_sm : eap statemachine context
- * @req_obj : received request message object
  * @data : peer context
  * @id   : response message id
  * Returns : pointer to message buffer or null
 **/
-static struct wpabuf * eap_noob_req_type_five(struct eap_sm *sm,json_t * req_obj , struct eap_noob_peer_context * data, u8 id)
+static struct wpabuf * eap_noob_req_type_five(struct eap_sm *sm, struct eap_noob_peer_context * data, u8 id)
 {
     struct wpabuf * resp = NULL;
-    int err = 0;
-    json_t * macinput = NULL, * Vers = NULL, * Cryptosuites = NULL, * emptystr = json_string("");
-    json_error_t error;
 
-    if (NULL == req_obj || NULL == data) {
+    if (!data) {
         wpa_printf(MSG_DEBUG, "EAP-NOOB: Input arguments NULL for function %s",__func__);
         return NULL;
     }
     wpa_printf(MSG_DEBUG, "EAP-NOOB: OOB PROCESS REQ TYPE 5");
-    eap_noob_decode_obj(data->server_attr,req_obj);
-    if (data->server_attr->err_code != NO_ERROR) {
-        resp = eap_noob_err_msg(data,id); return resp;
-    }
 
     if (data->server_attr->rcvd_params != TYPE_FIVE_PARAMS) {
         data->server_attr->err_code = E1002;
-        resp = eap_noob_err_msg(data,id); return resp;
+        resp = eap_noob_err_msg(data,id);
+        return resp;
     }
     data->peer_attr->PeerId = os_strdup(data->server_attr->PeerId);
     //TODO: handle eap_noob failure scenario
@@ -2186,33 +2167,7 @@ static struct wpabuf * eap_noob_req_type_five(struct eap_sm *sm,json_t * req_obj
     else
         resp = eap_noob_err_msg(data,id);
 
-    err -= (NULL == (Vers = json_array()));
-    for (int i = 0; i < MAX_SUP_VER; ++i)
-        err += json_array_append_new(Vers, json_integer(data->server_attr->version[i]));
-    err -= (NULL == (Cryptosuites = json_array()));
-    for (int i = 0; i < MAX_SUP_CSUITES ; i++)
-        err += json_array_append_new(Cryptosuites, json_integer(data->server_attr->cryptosuite[i]));
-    err -= (NULL == (macinput = json_array()));
-    err += json_array_append(macinput, emptystr);
-    err += json_array_append(macinput, Vers);
-    err += json_array_append_new(macinput, json_integer(data->peer_attr->version));
-    err += json_array_append_new(macinput, json_string(data->server_attr->PeerId));
-    err += json_array_append(macinput, Cryptosuites);
-    err += json_array_append(macinput, emptystr);
-    err += json_array_append_new(macinput, json_loads(data->server_attr->server_info, JSON_COMPACT|JSON_PRESERVE_ORDER, &error));
-    err += json_array_append_new(macinput, json_integer(data->peer_attr->cryptosuite));
-    err += json_array_append(macinput, emptystr);
-    err += json_array_append_new(macinput, json_string(data->server_attr->Realm));
-    err += json_array_append(macinput, emptystr);
-    err += json_array_append(macinput, emptystr);
-    err += json_array_append(macinput, emptystr);
-    err += json_array_append(macinput, emptystr);
-    err += json_array_append(macinput, emptystr);
-    data->server_attr->mac_input = macinput;
-    if (err < 0) wpa_printf(MSG_ERROR, "EAP-NOOB: Unexpected JSON processing error when creating mac input template.");
-
     data->server_attr->rcvd_params = 0;
-    json_decref(Vers); json_decref(Cryptosuites); json_decref(emptystr);
     return resp;
 }
 
@@ -2227,25 +2182,20 @@ static int eap_noob_exec_noobid_queries(struct eap_noob_peer_context * data)
 /**
  * eap_noob_req_type_four :  Decodes request type four
  * @eap_sm : eap statemachine context
- * @req_obj : received request message object
  * @data : peer context
  * @id   : response message id
  * Returns : pointer to message buffer or null
 **/
-static struct wpabuf * eap_noob_req_type_four(struct eap_sm * sm, json_t * req_obj, struct eap_noob_peer_context * data, u8 id)
+static struct wpabuf * eap_noob_req_type_four(struct eap_sm * sm, struct eap_noob_peer_context * data, u8 id)
 {
     struct wpabuf * resp = NULL;
     u8 * mac = NULL;
 
-    if (NULL == req_obj || NULL == data) {
+    if (!data) {
         wpa_printf(MSG_DEBUG, "EAP-NOOB: Input arguments NULL for function %s",__func__);
         return NULL;
     }
     wpa_printf(MSG_DEBUG, "EAP-NOOB: Entering %s", __func__);
-    eap_noob_decode_obj(data->server_attr, req_obj);
-    if (data->server_attr->err_code != NO_ERROR) {
-        resp = eap_noob_err_msg(data,id); return resp;
-    }
 
     if (data->server_attr->rcvd_params != TYPE_FOUR_PARAMS) {
         data->server_attr->err_code = E1002;
@@ -2269,13 +2219,17 @@ static struct wpabuf * eap_noob_req_type_four(struct eap_sm * sm, json_t * req_o
     if (NULL != (resp = eap_noob_verify_PeerId(data, id))) return resp;
 
     mac = eap_noob_gen_MAC(data, MACS_TYPE, data->server_attr->kdf_out->Kms, KMS_LEN, COMPLETION_EXCHANGE);
-    if (NULL == mac) { os_free(resp); return NULL; }
+    if (!mac) { 
+        os_free(resp);
+        return NULL;
+    }
 
     wpa_hexdump_ascii(MSG_DEBUG, "EAP-NOOB: MAC received ", data->server_attr->MAC, 32);
     wpa_hexdump_ascii(MSG_DEBUG, "EAP-NOOB: MAC calculated ", mac, 32);
     if (0 != os_memcmp(mac, data->server_attr->MAC, MAC_LEN)) {
         data->server_attr->err_code = E4001;
-        resp = eap_noob_err_msg(data,id); return resp;
+        resp = eap_noob_err_msg(data,id);
+        return resp;
     }
 
     resp = eap_noob_rsp_type_four(data, id);
@@ -2293,23 +2247,18 @@ static struct wpabuf * eap_noob_req_type_four(struct eap_sm * sm, json_t * req_o
 /**
  * eap_noob_req_type_three :  Decodes request type three
  * @eap_sm : eap statemachine context
- * @req_obj : received request message object
  * @data : peer context
  * @id   : response message id
  * Returns : pointer to message buffer or null
 **/
-static struct wpabuf * eap_noob_req_type_three(struct eap_sm * sm, json_t * req_obj, struct eap_noob_peer_context * data, u8 id)
+static struct wpabuf * eap_noob_req_type_three(struct eap_sm * sm, struct eap_noob_peer_context * data, u8 id)
 {
     struct wpabuf * resp = NULL;
 
-    if (NULL == req_obj || NULL == data) {
+    if (!data) {
         wpa_printf(MSG_DEBUG, "EAP-NOOB: Input arguments NULL for function %s",__func__); return NULL;
     }
     wpa_printf(MSG_DEBUG, "EAP-NOOB: Entering %s", __func__);
-    eap_noob_decode_obj(data->server_attr,req_obj);
-    if (data->server_attr->err_code != NO_ERROR) {
-        resp = eap_noob_err_msg(data,id); return resp;
-    }
 
     if (data->server_attr->rcvd_params != TYPE_THREE_PARAMS) {
         data->server_attr->err_code = E1002;
@@ -2327,23 +2276,18 @@ static struct wpabuf * eap_noob_req_type_three(struct eap_sm * sm, json_t * req_
 /**
  * eap_noob_req_type_two :  Decodes request type two
  * @eap_sm : eap statemachine context
- * @req_obj : received request message object
  * @data : peer context
  * @id : pointer to response message buffer or null
 **/
-static struct wpabuf * eap_noob_req_type_two(struct eap_sm *sm, json_t * req_obj , struct eap_noob_peer_context * data, u8 id)
+static struct wpabuf * eap_noob_req_type_two(struct eap_sm *sm, struct eap_noob_peer_context * data, u8 id)
 {
     struct wpabuf *resp = NULL;
 
-    if (NULL == req_obj || NULL == data) {
+    if (!data) {
         wpa_printf(MSG_DEBUG, "EAP-NOOB: Input arguments NULL for function %s",__func__);
         return NULL;
     }
     wpa_printf(MSG_DEBUG, "Entering %s", __func__);
-    eap_noob_decode_obj(data->server_attr,req_obj);
-    if (data->server_attr->err_code != NO_ERROR) {
-        resp = eap_noob_err_msg(data, id); return resp;
-    }
 
     if (data->server_attr->rcvd_params != TYPE_TWO_PARAMS) {
         data->server_attr->err_code = E1002;
@@ -2364,29 +2308,21 @@ static struct wpabuf * eap_noob_req_type_two(struct eap_sm *sm, json_t * req_obj
 /**
  * eap_noob_req_type_one :  Decodes request type one
  * @eap_sm : eap statemachine context
- * @req_obj : received request message object
  * @data : peer context
  * @id   : response message id
  * Returns : pointer to message buffer or null
 **/
-static struct wpabuf * eap_noob_req_type_one(struct eap_sm * sm, json_t * req_obj , struct eap_noob_peer_context * data, u8 id)
+static struct wpabuf * eap_noob_req_type_one(struct eap_sm * sm, struct eap_noob_peer_context * data, u8 id)
 {
     struct wpabuf * resp = NULL;
     char * url = NULL;
     char url_cpy[2 * MAX_URL_LEN] = {0};
-    int err = 0;
-    json_t * macinput = NULL, * Vers = NULL, * Cryptosuites = NULL, * emptystr = json_string("");
-    json_error_t error;
 
-    if (NULL == req_obj || NULL == data) {
+    if (!data) {
         wpa_printf(MSG_DEBUG, "EAP-NOOB: Input arguments NULL for function %s",__func__);
         return NULL;
     }
     wpa_printf(MSG_DEBUG, "EAP-NOOB: Entering %s", __func__);
-    eap_noob_decode_obj(data->server_attr,req_obj);
-    if (data->server_attr->err_code != NO_ERROR) {
-        resp = eap_noob_err_msg(data,id); return resp;
-    }
 
     if (data->server_attr->rcvd_params != TYPE_ONE_PARAMS) {
         data->server_attr->err_code = E1002;
@@ -2420,52 +2356,20 @@ static struct wpabuf * eap_noob_req_type_one(struct eap_sm * sm, json_t * req_ob
         resp = eap_noob_rsp_type_one(sm,data, id);
     } else resp = eap_noob_err_msg(data,id);
 
-    /* Create MAC imput template */
-    /* 1/2,Vers,Verp,PeerId,Cryptosuites,Dirs,ServerInfo,Cryptosuitep,Dirp,[Realm],PeerInfo,PKs,Ns,PKp,Np,Noob */
-    err -= (NULL == (Vers = json_array()));
-    for (int i = 0; i < MAX_SUP_VER; ++i)
-        err += json_array_append_new(Vers, json_integer(data->server_attr->version[i]));
-    err -= (NULL == (Cryptosuites = json_array()));
-    for (int i = 0; i < MAX_SUP_CSUITES ; i++)
-        err += json_array_append_new(Cryptosuites, json_integer(data->server_attr->cryptosuite[i]));
-    
-    err -= (NULL == (macinput = json_array()));
-    err += json_array_append(macinput, emptystr);
-    err += json_array_append(macinput, Vers);
-    err += json_array_append_new(macinput, json_integer(data->peer_attr->version));
-    err += json_array_append_new(macinput, json_string(data->server_attr->PeerId));
-    err += json_array_append(macinput, Cryptosuites);
-    err += json_array_append_new(macinput, json_integer(data->server_attr->dir));
-    err += json_array_append_new(macinput, json_loads(data->server_attr->server_info, JSON_COMPACT|JSON_PRESERVE_ORDER, &error));
-    err += json_array_append_new(macinput, json_integer(data->peer_attr->cryptosuite));
-    err += json_array_append_new(macinput, json_integer(data->peer_attr->dir));
-//  If no realm is assinged, use empty string for mac calculation
-    if (os_strlen(data->server_attr->Realm)>0)
-        err += json_array_append_new(macinput, json_string(data->server_attr->Realm));
-    else
-        err += json_array_append_new(macinput, emptystr);
-    err += json_array_append(macinput, emptystr);
-    err += json_array_append(macinput, emptystr);
-    err += json_array_append(macinput, emptystr);
-    err += json_array_append(macinput, emptystr);
-    err += json_array_append(macinput, emptystr);
-    data->server_attr->mac_input = macinput;
-    if (err < 0) wpa_printf(MSG_ERROR, "EAP-NOOB: Unexpected JSON processing error when creating mac input template.");
     data->server_attr->rcvd_params = 0;
-    json_decref(Vers); json_decref(Cryptosuites); json_decref(emptystr);
     return resp;
 }
 
-
-static struct wpabuf * eap_noob_req_type_eight(struct eap_sm *sm,json_t * req_obj , struct eap_noob_peer_context * data, u8 id)
+/**
+ * eap_noob_req_type_eight :  Decodes request type eight
+ * @eap_sm : eap statemachine context
+ * @data : peer context
+ * @id   : response message id
+ * Returns : pointer to message buffer or null
+**/
+static struct wpabuf * eap_noob_req_type_eight(struct eap_sm *sm, struct eap_noob_peer_context * data, u8 id)
 {
     struct wpabuf *resp = NULL;
-
-    eap_noob_decode_obj(data->server_attr,req_obj);
-    if (data->server_attr->err_code != NO_ERROR) {
-        resp = eap_noob_err_msg(data,id);
-        return resp;
-    }
 
     if (data->server_attr->rcvd_params != TYPE_HINT_PARAMS) {
         data->server_attr->err_code = E1002;
@@ -2479,7 +2383,14 @@ static struct wpabuf * eap_noob_req_type_eight(struct eap_sm *sm,json_t * req_ob
     return resp;
 }
 
-static struct wpabuf * eap_noob_req_type_nine(struct eap_sm * sm, json_t * req_obj, struct eap_noob_peer_context * data, u8 id)
+/**
+ * eap_noob_req_type_nine :  Decodes request type nine
+ * @eap_sm : eap statemachine context
+ * @data : peer context
+ * @id   : response message id
+ * Returns : pointer to message buffer or null
+**/
+static struct wpabuf * eap_noob_req_type_nine(struct eap_sm * sm, struct eap_noob_peer_context * data, u8 id)
 {
     struct wpabuf *resp = NULL;
 
@@ -2494,12 +2405,11 @@ static struct wpabuf * eap_noob_req_type_nine(struct eap_sm * sm, json_t * req_o
 /**
  * eap_noob_req_err_handling :  handle received error message
  * @eap_sm : eap statemachine context
- * @req_obj : received request message object
  * @data : peer context
  * @id   : response message id
  * Returns : pointer to message buffer or null
 **/
-static void eap_noob_req_err_handling(struct eap_sm *sm,json_t * req_obj , struct eap_noob_peer_context * data, u8 id)
+static void eap_noob_req_err_handling(struct eap_sm *sm, struct eap_noob_peer_context * data, u8 id)
 {
     if (!data->server_attr->err_code) {
         eap_noob_db_update(data, UPDATE_STATE_ERROR);
@@ -2521,9 +2431,9 @@ static struct wpabuf * eap_noob_process(struct eap_sm * sm, void * priv, struct 
     struct wpabuf * resp = NULL;
     const u8 * pos;
     size_t len;
-    json_t * req_obj = NULL;
-    json_t * req_type = NULL;
-    json_error_t error;
+    struct json_token * req_obj = NULL;
+    struct json_token * req_type = NULL;
+    struct json_token * error;
     int msgtype;
     u8 id =0;
 
@@ -2550,14 +2460,14 @@ static struct wpabuf * eap_noob_process(struct eap_sm * sm, void * priv, struct 
     ret->allowNotifications = FALSE;
 
     wpa_printf(MSG_DEBUG, "EAP-NOOB: Received Request = %s", pos);
-    req_obj = json_loads((char *)pos, JSON_COMPACT, &error);
+    req_obj = json_parse((char *) pos, os_strlen((char *) pos));
     id = eap_get_id(reqData);
 
-    if ((NULL != req_obj) && (json_is_object(req_obj) > 0)) {
-        req_type = json_object_get(req_obj,TYPE);
+    if (!req_obj) {
+        req_type = json_get_member(req_obj, TYPE);
 
-        if ((NULL != req_type) && (json_is_integer(req_type) > 0)) {
-            msgtype = json_integer_value(req_type);
+        if (!req_type) {
+            msgtype = req_type->number; 
         } else {
             wpa_printf(MSG_DEBUG, "EAP-NOOB: Request with unknown type received");
             data->server_attr->err_code = E1003;
@@ -2584,45 +2494,53 @@ static struct wpabuf * eap_noob_process(struct eap_sm * sm, void * priv, struct 
         wpa_printf(MSG_DEBUG, "EAP-NOOB: Deleted SSID");
     }
 
+    // Decode the JSON object and store it locally
+    // This way, all methods will be able to access it.
+    eap_noob_decode_obj(data->server_attr, req_obj);
+    if (data->server_attr->err_code != NO_ERROR) {
+        resp = eap_noob_err_msg(data,id);
+        goto EXIT;
+    }
+
     switch(msgtype) {
         case NONE:
             wpa_printf(MSG_DEBUG, "EAP-NOOB: Error message received");
-            eap_noob_req_err_handling(sm,req_obj,data, id);
+            eap_noob_req_err_handling(sm, data, id);
             break;
         case EAP_NOOB_TYPE_1:
-            resp = eap_noob_req_type_one(sm,req_obj ,data,id);
+            resp = eap_noob_req_type_one(sm, data, id);
             break;
         case EAP_NOOB_TYPE_2:
-            resp = eap_noob_req_type_two(sm,req_obj ,data, id);
+            resp = eap_noob_req_type_two(sm, data, id);
             break;
         case EAP_NOOB_TYPE_3:
-            resp = eap_noob_req_type_three(sm,req_obj ,data, id);
+            resp = eap_noob_req_type_three(sm, data, id);
             break;
         case EAP_NOOB_TYPE_4:
-            resp = eap_noob_req_type_four(sm,req_obj ,data, id);
+            resp = eap_noob_req_type_four(sm, data, id);
             if(data->server_attr->err_code == NO_ERROR) {
                 ret->methodState = METHOD_MAY_CONT;
                 ret->decision = DECISION_COND_SUCC;
             }
             break;
         case EAP_NOOB_TYPE_5:
-            resp = eap_noob_req_type_five(sm, req_obj, data, id);
+            resp = eap_noob_req_type_five(sm, data, id);
             break;
         case EAP_NOOB_TYPE_6:
-            resp = eap_noob_req_type_six(sm, req_obj, data, id);
+            resp = eap_noob_req_type_six(sm, data, id);
             break;
         case EAP_NOOB_TYPE_7:
-            resp = eap_noob_req_type_seven(sm, req_obj, data, id);
+            resp = eap_noob_req_type_seven(sm, data, id);
             if(data->server_attr->err_code == NO_ERROR) {
                 ret->methodState = METHOD_MAY_CONT;
                 ret->decision = DECISION_COND_SUCC;
             }
             break;
         case EAP_NOOB_HINT:
-            resp = eap_noob_req_type_eight(sm, req_obj, data, id);
+            resp = eap_noob_req_type_eight(sm, data, id);
             break;
         case EAP_NOOB_TYPE_9:
-            resp = eap_noob_req_type_nine(sm, req_obj, data, id);
+            resp = eap_noob_req_type_nine(sm, data, id);
             break;
         default:
             wpa_printf(MSG_DEBUG, "EAP-NOOB: Unknown EAP-NOOB request received");
@@ -2631,9 +2549,9 @@ static struct wpabuf * eap_noob_process(struct eap_sm * sm, void * priv, struct 
 EXIT:
     data->server_attr->err_code = NO_ERROR;
     if (req_type)
-        json_decref(req_type);
+        json_free(req_type);
     else if (req_obj)
-        json_decref(req_obj);
+        json_free(req_obj);
     return resp;
 }
 
