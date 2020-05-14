@@ -31,6 +31,7 @@
 #define MAX_INFO_LEN            500
 #define MAX_PEERID_LEN          22
 #define MAX_LINE_SIZE           1000
+#define MAX_MAC_INPUT_LEN       1500
 
 #define KDF_LEN                 320
 #define MSK_LEN                 64
@@ -109,6 +110,7 @@
 #define REALM                   "Realm"
 #define SERVERINFO_NAME         "Name"
 #define SERVERINFO_URL          "Url"
+#define KEYINGMODE              "KeyingMode"
 
 #define ECDH_KDF_MAX            (1 << 30)
 
@@ -263,8 +265,8 @@ struct eap_noob_ecdh_key_exchange {
     char * y_b64;
     size_t y_len;
 
-    json_t * jwk_serv;
-    json_t * jwk_peer;
+    char * jwk_serv;
+    char * jwk_peer;
 
     u8 * shared_key;
     char * shared_key_b64;
@@ -304,7 +306,6 @@ struct eap_noob_peer_data {
     struct eap_noob_oob_data * oob_data;
     struct eap_noob_ecdh_kdf_nonce * kdf_nonce_data;
     struct eap_noob_ecdh_kdf_out * kdf_out;
-    json_t * mac_input;
     char * mac_input_str;
 
     char * Realm;
@@ -324,7 +325,8 @@ struct eap_noob_server_data {
     u32 version[MAX_SUP_VER];
     u32 cryptosuite[MAX_SUP_CSUITES];
     u32 dir;
-    char * serverinfo;
+    u32 keying_mode;
+    char * server_info;
     u32 config_params;
     struct eap_noob_server_config_params * server_config_params;
 };
