@@ -1606,7 +1606,7 @@ static struct wpabuf * eap_noob_rsp_type_three(const struct eap_noob_peer_contex
     }
 
     json_start_object(json, NULL);
-    json_add_int(json, TYPE, EAP_NOOB_TYPE_9);
+    json_add_int(json, TYPE, EAP_NOOB_TYPE_3);
     json_value_sep(json);
     json_add_string(json, PEERID, data->peer_attr->PeerId);
     json_end_object(json);
@@ -1627,7 +1627,6 @@ EXIT:
  *  eap_noob_build_JWK : Builds a JWK object to send in the inband message
  *  @jwk : output json object
  *  @x_64 : x co-ordinate in base64url format
- *  @y_64 : y co-ordinate in base64url format
  *  Returns : FAILURE/SUCCESS
 **/
 static int eap_noob_build_JWK(char ** jwk, const char * x_b64)
@@ -1710,7 +1709,7 @@ static struct wpabuf * eap_noob_rsp_type_two(struct eap_noob_peer_context * data
     }
 
     // Build JWK to represent peer
-    if (eap_noob_build_JWK(&data->server_attr->ecdh_exchange_data->jwk_peer,
+    if (FAILURE == eap_noob_build_JWK(&data->server_attr->ecdh_exchange_data->jwk_peer,
                 data->server_attr->ecdh_exchange_data->x_b64)) {
         wpa_printf(MSG_DEBUG, "EAP-NOOB: Failed to build JWK in response type 2");
         goto EXIT;
@@ -1866,7 +1865,7 @@ static struct wpabuf * eap_noob_rsp_type_nine(const struct eap_noob_peer_context
     size_t len = 100 + strlen(TYPE) + strlen(PEERID) + MAX_PEER_ID_LEN + strlen(PEERSTATE);
 
     if (!data) {
-		wpa_printf(MSG_DEBUG, "EAP-NOOB: Input arguments NULL for function %s", __func__);
+        wpa_printf(MSG_DEBUG, "EAP-NOOB: Input arguments NULL for function %s", __func__);
         goto EXIT;
     }
 
