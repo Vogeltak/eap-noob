@@ -4,7 +4,6 @@
 #include <stdint.h>
 #include <unistd.h>
 #include <sqlite3.h>
-#include <jansson.h>
 #include <time.h>
 
 /* Configuration file */
@@ -97,7 +96,7 @@
 #define NP                      "Np"
 #define NP2                     "Np2"
 #define PKP                     "PKp"
-#define	PKP2					"PKp2"
+#define	PKP2                    "PKp2"
 #define PEERINFO                "PeerInfo"
 #define PEERSTATE               "PeerState"
 #define NOOBID                  "NoobId"
