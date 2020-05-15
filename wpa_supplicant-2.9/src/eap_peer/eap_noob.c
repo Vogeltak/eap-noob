@@ -980,12 +980,6 @@ static void eap_noob_decode_obj(struct eap_noob_server_data * data, struct json_
                 }
                 // ServerInfo
                 else if (!os_strcmp(key, SERVERINFO)) {
-                    struct wpabuf * str = wpabuf_alloc(MAX_INFO_LEN);
-                    if (!str) {
-                        wpa_printf(MSG_DEBUG, "EAP-NOOB: Failed to allocate memory for JSON object");
-                        goto EXIT;
-                    }
-
                     struct json_token * child_copy;
                     memcpy(&child_copy, &child, sizeof(child));
                     if (!child_copy) {
@@ -995,18 +989,12 @@ static void eap_noob_decode_obj(struct eap_noob_server_data * data, struct json_
 
                     // Exclude name of the new root object from the JSON dump
                     child_copy->name = NULL;
-                    json_token_to_string(str, child);
+                    data->server_info = json_dump(child_copy);
 
-                    // Retrieve string
-                    char * server_info = strndup(wpabuf_head(str), wpabuf_len(str));
+                    wpa_printf(MSG_DEBUG, "EAP-NOOB: Server info: %s", data->server_info);
 
-                    wpa_printf(MSG_DEBUG, "EAP-NOOB: Server info: %s", server_info);
-
-                    data->server_info = server_info;
-
-                    // Free intermediate variables
+                    // Free intermediate variable
                     json_free(child_copy);
-                    wpabuf_free(str);
 
                     data->rcvd_params |= INFO_RCVD;
                 }
