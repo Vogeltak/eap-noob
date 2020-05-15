@@ -1,11 +1,6 @@
 #ifndef EAPOOB_H
 #define EAPOOB_H
 
-#include <stdint.h>
-#include <unistd.h>
-#include <sqlite3.h>
-#include <time.h>
-
 /* Configuration file */
 #define CONF_FILE               "eapnoob.conf"
 
@@ -28,7 +23,7 @@
 #define MAX_SUP_CSUITES         10
 #define MAX_CONF_LEN            500
 #define MAX_INFO_LEN            500
-#define MAX_PEERID_LEN          22
+#define MAX_PEER_ID_LEN         22
 #define MAX_LINE_SIZE           1000
 #define MAX_MAC_INPUT_LEN       1500
 

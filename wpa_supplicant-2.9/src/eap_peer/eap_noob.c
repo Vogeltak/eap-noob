@@ -47,7 +47,7 @@
 #include <string.h>
 #include <sqlite3.h>
 #include "common.h"
-#include "../utils/json.h"
+#include "json.h"
 #include "eap_i.h"
 #include "eap_noob.h"
 #include "../../wpa_supplicant/config.h"
