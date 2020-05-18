@@ -1245,7 +1245,7 @@ static struct wpabuf * eap_noob_err_msg(struct eap_noob_server_context * data, u
     json_end_object(json);
 
     char * json_str = strndup(wpabuf_head(json), wpabuf_len(json));
-    len = os_strlen(json_str) + 1;
+    len = os_strlen(json_str);
 
     if (code != E1001 && FAILURE == eap_noob_db_functions(data, UPDATE_STATE_ERROR)) {
         wpa_printf(MSG_DEBUG,"EAP-NOOB: Failed to write error to the database");
@@ -1473,7 +1473,7 @@ static struct wpabuf * eap_noob_req_type_seven(struct eap_noob_server_context * 
     json_end_object(json);
 
     char * json_str = strndup(wpabuf_head(json), wpabuf_len(json));
-    len = os_strlen(json_str) + 1;
+    len = os_strlen(json_str);
 
     resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB,len , EAP_CODE_REQUEST, id);
     if (!resp) {
@@ -1548,7 +1548,7 @@ static struct wpabuf * eap_noob_req_type_six(struct eap_noob_server_context * da
     json_end_object(json);
 
     char * json_str = strndup(wpabuf_head(json), wpabuf_len(json));
-    len = os_strlen(json_str) + 1;
+    len = os_strlen(json_str);
 
     resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB, len, EAP_CODE_REQUEST, id);
     if (!resp) {
@@ -1618,7 +1618,7 @@ static struct wpabuf * eap_noob_req_type_five(struct eap_noob_server_context * d
     json_end_object(json);
 
     char * json_str = strndup(wpabuf_head(json), wpabuf_len(json));
-    len = os_strlen(json_str) + 1;
+    len = os_strlen(json_str);
 
     resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB, len, EAP_CODE_REQUEST, id);
     if (!resp) {
@@ -1686,7 +1686,7 @@ static struct wpabuf * eap_noob_req_type_four(struct eap_noob_server_context * d
     json_end_object(json);
 
     char * json_str = strndup(wpabuf_head(json), wpabuf_len(json));
-    len = os_strlen(json_str) + 1;
+    len = os_strlen(json_str);
 
     resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB, len, EAP_CODE_REQUEST, id);
     if (!resp) {
@@ -1741,7 +1741,7 @@ static struct wpabuf * eap_noob_req_type_three(struct eap_noob_server_context * 
     wpa_printf(MSG_DEBUG, "EAP-NOOB: Current time is %ld", data->peer_attr->last_used_time);
 
     char * json_str = strndup(wpabuf_head(json), wpabuf_len(json));
-    len = os_strlen(json_str) + 1;
+    len = os_strlen(json_str);
 
     resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB, len, EAP_CODE_RESPONSE, id);
     if (resp == NULL) {
@@ -1875,7 +1875,7 @@ static struct wpabuf * eap_noob_req_type_two(struct eap_noob_server_context *dat
     json_end_object(json);
 
     char * json_str = strndup(wpabuf_head(json), wpabuf_len(json));
-    len = os_strlen(json_str) + 1;
+    len = os_strlen(json_str);
 
     resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB, len, EAP_CODE_REQUEST, id);
     if (!resp) {
@@ -1908,6 +1908,13 @@ static struct wpabuf * eap_noob_req_type_one(struct eap_noob_server_context * da
     if (!data) {
         wpa_printf(MSG_DEBUG, "EAP-NOOB: Input arguments NULL for function %s",__func__);
         goto EXIT;
+    }
+
+    EAP_NOOB_FREE(data->peer_attr->PeerId);
+    data->peer_attr->PeerId = os_malloc(MAX_PEER_ID_LEN);
+    if (eap_noob_get_id_peer(data->peer_attr->PeerId, MAX_PEER_ID_LEN)) {
+        wpa_printf(MSG_ERROR, "EAP-NOOB: Failed to generate PeerId");
+        return NULL;
     }
 
     json = wpabuf_alloc(len);
@@ -1949,7 +1956,7 @@ static struct wpabuf * eap_noob_req_type_one(struct eap_noob_server_context * da
     json_end_object(json);
 
     char * json_str = strndup(wpabuf_head(json), wpabuf_len(json));
-    len = os_strlen(json_str) + 1;
+    len = os_strlen(json_str);
 
     resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB, len, EAP_CODE_REQUEST, id);
     if (!resp) {
@@ -1995,7 +2002,7 @@ static struct wpabuf * eap_noob_req_noobid(struct eap_noob_server_context * data
     json_end_object(json);
 
     char * json_str = strndup(wpabuf_head(json), wpabuf_len(json));
-    len = os_strlen(json_str) + 1;
+    len = os_strlen(json_str);
 
     resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB, len, EAP_CODE_REQUEST, id);
     if (!resp) {
@@ -2037,7 +2044,7 @@ static struct wpabuf * eap_noob_req_type_nine(struct eap_noob_server_context * d
     json_end_object(json);
 
     char * json_str = strndup(wpabuf_head(json), wpabuf_len(json));
-    len = os_strlen(json_str) + 1;
+    len = os_strlen(json_str);
 
     resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB, len, EAP_CODE_REQUEST, id);
     if (!resp) {
@@ -2070,7 +2077,7 @@ static struct wpabuf * eap_noob_buildReq(struct eap_sm * sm, void * priv, u8 id)
     }
     data = priv;
 
-    printf("next req = %d\n", data->peer_attr->next_req);
+    wpa_printf(MSG_DEBUG, "EAP-NOOB: next request = %d", data->peer_attr->next_req);
     //TODO : replce switch case with function pointers.
     switch (data->peer_attr->next_req) {
         case NONE:
@@ -2141,6 +2148,8 @@ static _Bool eap_noob_check(struct eap_sm * sm, void * priv,
     state = data->peer_attr->server_state;
     pos = eap_hdr_validate(EAP_VENDOR_IETF, EAP_TYPE_NOOB, respData, &len);
 
+    wpa_printf(MSG_DEBUG, "EAP-NOOB: Received response = %s", pos);
+
     // Check for possible errors
 
     resp_obj = json_parse((char *) pos, len);
@@ -2181,10 +2190,12 @@ static _Bool eap_noob_check(struct eap_sm * sm, void * priv,
     }
 
 EXIT:
+    /*
     if (resp_obj)
         json_free(resp_obj);
     if (resp_type)
         json_free(resp_type);
+     */
     return ret;
 }
 
@@ -2429,7 +2440,7 @@ static void  eap_noob_decode_obj(struct eap_noob_peer_data * data, struct json_t
 
                 // PeerId
                 if (!os_strcmp(key, PEERID)) {
-                    data->PeerId = os_strdup(val_str);
+                    data->peerid_rcvd = os_strdup(val_str);
                     data->rcvd_params |= PEERID_RCVD;
                 }
                 // NoobId
@@ -2519,6 +2530,7 @@ EXIT:
     if (child)
         json_free(child);
     EAP_NOOB_FREE(key);
+    wpa_printf(MSG_DEBUG, "EAP-NOOB: Exiting %s", __func__);
 }
 
 /**
@@ -2922,7 +2934,8 @@ static void eap_noob_process(struct eap_sm * sm, void * priv, struct wpabuf * re
     }
     data->peer_attr->recv_msg = 0;
 EXIT:
-    json_free(resp_obj);
+    ;
+    //json_free(resp_obj);
 }
 
 

@@ -1489,7 +1489,7 @@ static struct wpabuf * eap_noob_err_msg(struct eap_noob_peer_context * data, u8 
     json_end_object(json);
 
     json_str = strndup(wpabuf_head(json), wpabuf_len(json));
-    len = os_strlen(json_str) + 1;
+    len = os_strlen(json_str);
 
     resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB, len, EAP_CODE_RESPONSE, id);
     if (!resp) {
@@ -1566,7 +1566,7 @@ static struct wpabuf * eap_noob_rsp_type_four(const struct eap_noob_peer_context
     json_end_object(json);
 
     json_str = strndup(wpabuf_head(json), wpabuf_len(json));
-    len = os_strlen(json_str) + 1;
+    len = os_strlen(json_str);
 
     resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB, len, EAP_CODE_RESPONSE, id);
     if (!resp) {
@@ -1614,7 +1614,7 @@ static struct wpabuf * eap_noob_rsp_type_three(const struct eap_noob_peer_contex
     json_end_object(json);
 
     json_str = strndup(wpabuf_head(json), wpabuf_len(json));
-    len = os_strlen(json_str) + 1;
+    len = os_strlen(json_str);
 
     resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB, len, EAP_CODE_RESPONSE, id);
     if (resp == NULL) {
@@ -1750,7 +1750,7 @@ static struct wpabuf * eap_noob_rsp_type_two(struct eap_noob_peer_context * data
     json_end_object(json);
 
     json_str = strndup(wpabuf_head(json), wpabuf_len(json));
-    len = os_strlen(json_str) + 1;
+    len = os_strlen(json_str);
 
     resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB, len, EAP_CODE_RESPONSE, id);
     if (!resp) {
@@ -1804,11 +1804,12 @@ static struct wpabuf * eap_noob_rsp_type_one(struct eap_sm *sm,const struct eap_
     json_value_sep(json);
     json_add_int(json, DIRP, data->peer_attr->dir);
     json_value_sep(json);
-    json_add_string(json, PEERINFO, data->peer_attr->PeerInfo);
+    eap_noob_prepare_peer_info_json(sm, data->peer_attr->peer_config_params,
+                                    json, PEERINFO);
     json_end_object(json);
 
     json_str = strndup(wpabuf_head(json), wpabuf_len(json));
-    len = os_strlen(json_str) + 1;
+    len = os_strlen(json_str);
 
     resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB, len, EAP_CODE_RESPONSE, id);
     if (!resp) {
@@ -1861,7 +1862,7 @@ static struct wpabuf * eap_noob_rsp_type_eight(const struct eap_noob_peer_contex
     wpa_printf(MSG_DEBUG, "EAP-NOOB: Hint is %s", data->server_attr->oob_data->NoobId_b64);
 
     json_str = strndup(wpabuf_head(json), wpabuf_len(json));
-    len = os_strlen(json_str) + 1;
+    len = os_strlen(json_str);
 
     resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB, len, EAP_CODE_RESPONSE, id);
     if (!resp) {
@@ -1914,7 +1915,7 @@ static struct wpabuf * eap_noob_rsp_type_nine(const struct eap_noob_peer_context
     json_end_object(json);
 
     json_str = strndup(wpabuf_head(json), wpabuf_len(json));
-    len = os_strlen(json_str) + 1;
+    len = os_strlen(json_str);
 
     resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB, len, EAP_CODE_RESPONSE, id);
     if (!resp) {
@@ -1969,7 +1970,7 @@ static struct wpabuf * eap_noob_rsp_type_five(struct eap_sm *sm, const struct ea
     json_end_object(json);
 
     json_str = strndup(wpabuf_head(json), wpabuf_len(json));
-    len = os_strlen(json_str) + 1;
+    len = os_strlen(json_str);
 
     resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB, len, EAP_CODE_RESPONSE, id);
     if (!resp) {
@@ -2039,7 +2040,7 @@ static struct wpabuf * eap_noob_rsp_type_six(struct eap_noob_peer_context * data
     json_end_object(json);
 
     json_str = strndup(wpabuf_head(json), wpabuf_len(json));
-    len = os_strlen(json_str) + 1;
+    len = os_strlen(json_str);
 
     resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB, len, EAP_CODE_RESPONSE, id);
     if (!resp) {
@@ -2103,7 +2104,7 @@ static struct wpabuf * eap_noob_rsp_type_seven(const struct eap_noob_peer_contex
     json_end_object(json);
 
     json_str = strndup(wpabuf_head(json), wpabuf_len(json));
-    len = os_strlen(json_str) + 1;
+    len = os_strlen(json_str);
 
     resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB,len , EAP_CODE_RESPONSE, id);
     if (!resp) {
