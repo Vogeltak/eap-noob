@@ -1457,6 +1457,7 @@ static struct wpabuf * eap_noob_err_msg(struct eap_noob_peer_context * data, u8 
 {
     struct wpabuf * json = NULL;
     struct wpabuf * resp = NULL;
+    char * json_str = NULL;
     size_t len = 100 + strlen(TYPE) + strlen(ERRORCODE) + strlen(ERRORINFO);
     size_t code = 0;
 
@@ -1486,15 +1487,20 @@ static struct wpabuf * eap_noob_err_msg(struct eap_noob_peer_context * data, u8 
     json_add_string(json, ERRORINFO, error_info[code]);
     json_end_object(json);
 
+    json_str = strndup(wpabuf_head(json), wpabuf_len(json));
+    len = os_strlen(json_str) + 1;
+
     resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB, len, EAP_CODE_RESPONSE, id);
     if (!resp) {
         wpa_printf(MSG_DEBUG, "EAP-NOOB: Failed to allocate memory for error message response");
         goto EXIT;
     }
 
-    wpabuf_put_buf(resp, json);
+    wpabuf_put_data(resp, json_str, len);
 EXIT:
     wpabuf_free(json);
+    if (json_str)
+        EAP_NOOB_FREE(json_str);
     return resp;
 }
 
@@ -1557,13 +1563,16 @@ static struct wpabuf * eap_noob_rsp_type_four(const struct eap_noob_peer_context
     json_add_string(json, MACP, mac_b64);
     json_end_object(json);
 
+    char * json_str = strndup(wpabuf_head(json), wpabuf_len(json));
+    len = os_strlen(json_str) + 1;
+
     resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB, len, EAP_CODE_RESPONSE, id);
     if (!resp) {
         wpa_printf(MSG_DEBUG, "EAP-NOOB: Failed to allocate memory for Completion Response");
         goto EXIT;
     }
 
-    wpabuf_put_buf(resp, json);
+    wpabuf_put_data(resp, json_str, len);
 EXIT:
     wpabuf_free(json);
     EAP_NOOB_FREE(mac_b64);
@@ -1599,15 +1608,20 @@ static struct wpabuf * eap_noob_rsp_type_three(const struct eap_noob_peer_contex
     json_add_string(json, PEERID, data->peer_attr->PeerId);
     json_end_object(json);
 
+    char * json_str = strndup(wpabuf_head(json), wpabuf_len(json));
+    len = os_strlen(json_str) + 1;
+
     resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB, len, EAP_CODE_RESPONSE, id);
     if (resp == NULL) {
         wpa_printf(MSG_DEBUG, "EAP-NOOB: Failed to allocate memory for Response/NOOB-WE");
         goto EXIT;
     }
 
-    wpabuf_put_buf(resp, json);
+    wpabuf_put_data(resp, json_str, len);
 EXIT:
     wpabuf_free(json);
+    if (json_str)
+        EAP_NOOB_FREE(json_str);
     return resp;
 }
 
@@ -1729,15 +1743,20 @@ static struct wpabuf * eap_noob_rsp_type_two(struct eap_noob_peer_context * data
     json_add_string(json, NP, Np_b64);
     json_end_object(json);
 
+    char * json_str = strndup(wpabuf_head(json), wpabuf_len(json));
+    len = os_strlen(json_str) + 1;
+
     resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB, len, EAP_CODE_RESPONSE, id);
     if (!resp) {
         wpa_printf(MSG_ERROR, "EAP-NOOB: Failed to allocate memory for Response/NOOB-IE");
         goto EXIT;
     }
 
-    wpabuf_put_buf(resp, json);
+    wpabuf_put_data(resp, json_str, len);
 EXIT:
     wpabuf_free(json);
+    if (json_str)
+        EAP_NOOB_FREE(json_str);
     EAP_NOOB_FREE(Np_b64);
     return resp;
 }
@@ -1781,15 +1800,20 @@ static struct wpabuf * eap_noob_rsp_type_one(struct eap_sm *sm,const struct eap_
     json_add_string(json, PEERINFO, data->peer_attr->PeerInfo);
     json_end_object(json);
 
+    char * json_str = strndup(wpabuf_head(json), wpabuf_len(json));
+    len = os_strlen(json_str) + 1;
+
     resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB, len, EAP_CODE_RESPONSE, id);
     if (!resp) {
         wpa_printf(MSG_ERROR, "EAP-NOOB: Failed to allocate memory for Response/NOOB-IE");
         goto EXIT;
     }
 
-    wpabuf_put_buf(resp, json);
+    wpabuf_put_data(resp, json_str, len);
 EXIT:
     wpabuf_free(json);
+    if (json_str)
+        EAP_NOOB_FREE(json_str);
     return resp;
 }
 
@@ -1828,15 +1852,20 @@ static struct wpabuf * eap_noob_rsp_type_eight(const struct eap_noob_peer_contex
 
     wpa_printf(MSG_DEBUG, "EAP-NOOB: Hint is %s", data->server_attr->oob_data->NoobId_b64);
 
+    char * json_str = strndup(wpabuf_head(json), wpabuf_len(json));
+    len = os_strlen(json_str) + 1;
+
     resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB, len, EAP_CODE_RESPONSE, id);
     if (!resp) {
         wpa_printf(MSG_DEBUG, "EAP-NOOB: Failed to allocate memory for NoobId hint response");
         goto EXIT;
     }
 
-    wpabuf_put_buf(resp, json);
+    wpabuf_put_data(resp, json_str, len);
 EXIT:
     wpabuf_free(json);
+    if (json_str)
+        EAP_NOOB_FREE(json_str);
     return resp;
 }
 
@@ -1875,15 +1904,20 @@ static struct wpabuf * eap_noob_rsp_type_nine(const struct eap_noob_peer_context
     json_add_int(json, PEERSTATE, data->server_attr->state);
     json_end_object(json);
 
+    char * json_str = strndup(wpabuf_head(json), wpabuf_len(json));
+    len = os_strlen(json_str) + 1;
+
     resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB, len, EAP_CODE_RESPONSE, id);
     if (!resp) {
         wpa_printf(MSG_DEBUG, "EAP-NOOB: Failed to allocate memory for handshake response");
         goto EXIT;
     }
 
-    wpabuf_put_buf(resp, json);
+    wpabuf_put_data(resp, json_str, len);
 EXIT:
     wpabuf_free(json);
+    if (json_str)
+        EAP_NOOB_FREE(json_str);
     return resp;
 }
 
@@ -1924,15 +1958,20 @@ static struct wpabuf * eap_noob_rsp_type_five(struct eap_sm *sm, const struct ea
     eap_noob_prepare_peer_info_json(sm, data->peer_attr->peer_config_params, json, PEERINFO);
     json_end_object(json);
 
+    char * json_str = strndup(wpabuf_head(json), wpabuf_len(json));
+    len = os_strlen(json_str) + 1;
+
     resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB, len, EAP_CODE_RESPONSE, id);
     if (!resp) {
         wpa_printf(MSG_ERROR, "EAP-NOOB: Failed to allocate memory for Reconnect Exchange Response");
         goto EXIT;
     }
 
-    wpabuf_put_buf(resp, json);
+    wpabuf_put_data(resp, json_str, len);
 EXIT:
     wpabuf_free(json);
+    if (json_str)
+        EAP_NOOB_FREE(json_str);
     return resp;
 }
 
@@ -1988,15 +2027,20 @@ static struct wpabuf * eap_noob_rsp_type_six(struct eap_noob_peer_context * data
     json_add_string(json, NP2, Np_b64);
     json_end_object(json);
 
+    char * json_str = strndup(wpabuf_head(json), wpabuf_len(json));
+    len = os_strlen(json_str) + 1;
+
     resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB, len, EAP_CODE_RESPONSE, id);
     if (!resp) {
         wpa_printf(MSG_DEBUG, "EAP-NOOB: Failed to allocate memory for Response/RE");
         goto EXIT;
     }
 
-    wpabuf_put_buf(resp, json);
+    wpabuf_put_data(resp, json_str, len);
 EXIT:
     wpabuf_free(json);
+    if (json_str)
+        EAP_NOOB_FREE(json_str);
     EAP_NOOB_FREE(Np_b64);
     return resp;
 }
@@ -2046,15 +2090,20 @@ static struct wpabuf * eap_noob_rsp_type_seven(const struct eap_noob_peer_contex
     json_add_string(json, MACP2, mac_b64);
     json_end_object(json);
 
+    char * json_str = strndup(wpabuf_head(json), wpabuf_len(json));
+    len = os_strlen(json_str) + 1;
+
     resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB,len , EAP_CODE_RESPONSE, id);
     if (!resp) {
         wpa_printf(MSG_DEBUG, "EAP-NOOB: Failed to allocate memory for Response/NOOB-RE");
         goto EXIT;
     }
 
-    wpabuf_put_buf(resp, json);
+    wpabuf_put_data(resp, json_str, len);
 EXIT:
     wpabuf_free(json);
+    if (json_str)
+        EAP_NOOB_FREE(json_str);
     return resp;
 }
 
