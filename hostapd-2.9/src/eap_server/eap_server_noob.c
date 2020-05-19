@@ -1214,6 +1214,7 @@ static struct wpabuf * eap_noob_err_msg(struct eap_noob_server_context * data, u
 {
     struct wpabuf * json = NULL;
     struct wpabuf * req = NULL;
+    char * json_str = NULL;
     size_t len = 100 + strlen(TYPE) + strlen(ERRORCODE) + strlen(ERRORINFO);
     size_t code = 0;
 
@@ -1244,7 +1245,7 @@ static struct wpabuf * eap_noob_err_msg(struct eap_noob_server_context * data, u
     json_add_string(json, ERRORINFO, error_info[code]);
     json_end_object(json);
 
-    char * json_str = strndup(wpabuf_head(json), wpabuf_len(json));
+    json_str = strndup(wpabuf_head(json), wpabuf_len(json));
     len = os_strlen(json_str);
 
     if (code != E1001 && FAILURE == eap_noob_db_functions(data, UPDATE_STATE_ERROR)) {
@@ -1432,6 +1433,7 @@ static struct wpabuf * eap_noob_req_type_seven(struct eap_noob_server_context * 
 {
     struct wpabuf * json = NULL;
     struct wpabuf * resp = NULL;
+    char * json_str = NULL;
     size_t len = 100 + strlen(TYPE) + strlen(PEERID) + MAX_PEER_ID_LEN + strlen(MACP2) + MAC_LEN;
     u8 * mac = NULL;
     char * mac_b64 = NULL;
@@ -1472,7 +1474,7 @@ static struct wpabuf * eap_noob_req_type_seven(struct eap_noob_server_context * 
     json_add_string(json, MACS2, mac_b64);
     json_end_object(json);
 
-    char * json_str = strndup(wpabuf_head(json), wpabuf_len(json));
+    json_str = strndup(wpabuf_head(json), wpabuf_len(json));
     len = os_strlen(json_str);
 
     resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB,len , EAP_CODE_REQUEST, id);
@@ -1499,6 +1501,7 @@ static struct wpabuf * eap_noob_req_type_six(struct eap_noob_server_context * da
 {
     struct wpabuf * json = NULL;
     struct wpabuf * resp = NULL;
+    char * json_str = NULL;
     size_t len = 100 + strlen(TYPE) + strlen(PEERID) + MAX_PEER_ID_LEN
         + strlen(NS) + NONCE_LEN * 1.5;
     char * Ns_b64;
@@ -1547,7 +1550,7 @@ static struct wpabuf * eap_noob_req_type_six(struct eap_noob_server_context * da
     json_add_string(json, NS2, Ns_b64);
     json_end_object(json);
 
-    char * json_str = strndup(wpabuf_head(json), wpabuf_len(json));
+    json_str = strndup(wpabuf_head(json), wpabuf_len(json));
     len = os_strlen(json_str);
 
     resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB, len, EAP_CODE_REQUEST, id);
@@ -1575,6 +1578,7 @@ static struct wpabuf * eap_noob_req_type_five(struct eap_noob_server_context * d
 {
     struct wpabuf * json = NULL;
     struct wpabuf * resp = NULL;
+    char * json_str = NULL;
     size_t len = 100 + strlen(VERS) + MAX_SUP_VER + strlen(PEERID) + MAX_PEER_ID_LEN +
         strlen(CRYPTOSUITES) + MAX_SUP_CSUITES + strlen(PEERINFO) + MAX_INFO_LEN;
 
@@ -1617,7 +1621,7 @@ static struct wpabuf * eap_noob_req_type_five(struct eap_noob_server_context * d
     eap_noob_prepare_server_info_json(data->server_attr->server_config_params, json, SERVERINFO);
     json_end_object(json);
 
-    char * json_str = strndup(wpabuf_head(json), wpabuf_len(json));
+    json_str = strndup(wpabuf_head(json), wpabuf_len(json));
     len = os_strlen(json_str);
 
     resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB, len, EAP_CODE_REQUEST, id);
@@ -1643,6 +1647,7 @@ static struct wpabuf * eap_noob_req_type_four(struct eap_noob_server_context * d
 {
     struct wpabuf * json = NULL;
     struct wpabuf * resp = NULL;
+    char * json_str = NULL;
     size_t len = 100 + strlen(TYPE) + strlen(PEERID) + MAX_PEER_ID_LEN +
         + strlen(NOOBID) + NOOBID_LEN + strlen(MACS) + MAC_LEN;
     char * mac_b64 = NULL;
@@ -1685,7 +1690,7 @@ static struct wpabuf * eap_noob_req_type_four(struct eap_noob_server_context * d
     json_add_string(json, MACS, mac_b64);
     json_end_object(json);
 
-    char * json_str = strndup(wpabuf_head(json), wpabuf_len(json));
+    json_str = strndup(wpabuf_head(json), wpabuf_len(json));
     len = os_strlen(json_str);
 
     resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB, len, EAP_CODE_REQUEST, id);
@@ -1712,6 +1717,7 @@ static struct wpabuf * eap_noob_req_type_three(struct eap_noob_server_context * 
 {
     struct wpabuf * json = NULL;
     struct wpabuf * resp = NULL;
+    char * json_str = NULL;
     size_t len = 100 + strlen(TYPE) + strlen(PEERID) + MAX_PEER_ID_LEN + strlen(SLEEPTIME);
     struct timespec time;
 
@@ -1740,7 +1746,7 @@ static struct wpabuf * eap_noob_req_type_three(struct eap_noob_server_context * 
     data->peer_attr->last_used_time = time.tv_sec;
     wpa_printf(MSG_DEBUG, "EAP-NOOB: Current time is %ld", data->peer_attr->last_used_time);
 
-    char * json_str = strndup(wpabuf_head(json), wpabuf_len(json));
+    json_str = strndup(wpabuf_head(json), wpabuf_len(json));
     len = os_strlen(json_str);
 
     resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB, len, EAP_CODE_RESPONSE, id);
@@ -1810,6 +1816,7 @@ static struct wpabuf * eap_noob_req_type_two(struct eap_noob_server_context *dat
 {
     struct wpabuf * json = NULL;
     struct wpabuf * resp = NULL;
+    char * json_str = NULL;
     size_t len = 100 + strlen(TYPE) + strlen(PEERID) + MAX_PEER_ID_LEN
         + strlen(PKS) + 500 + strlen(NS) + NONCE_LEN * 1.5 + strlen(SLEEPTIME);
     //size_t secret_len = ECDH_SHARED_SECRET_LEN;
@@ -1874,7 +1881,7 @@ static struct wpabuf * eap_noob_req_type_two(struct eap_noob_server_context *dat
     json_add_int(json, SLEEPTIME, data->peer_attr->sleeptime);
     json_end_object(json);
 
-    char * json_str = strndup(wpabuf_head(json), wpabuf_len(json));
+    json_str = strndup(wpabuf_head(json), wpabuf_len(json));
     len = os_strlen(json_str);
 
     resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB, len, EAP_CODE_REQUEST, id);
@@ -1902,6 +1909,7 @@ static struct wpabuf * eap_noob_req_type_one(struct eap_noob_server_context * da
 {
     struct wpabuf * json = NULL;
     struct wpabuf * resp = NULL;
+    char * json_str = NULL;
     size_t len = 100 + strlen(VERS) + MAX_SUP_VER + strlen(PEERID) + MAX_PEER_ID_LEN +
         strlen(CRYPTOSUITES) + MAX_SUP_CSUITES + strlen(PEERINFO) + MAX_INFO_LEN;
 
@@ -1955,7 +1963,7 @@ static struct wpabuf * eap_noob_req_type_one(struct eap_noob_server_context * da
     eap_noob_prepare_server_info_json(data->server_attr->server_config_params, json, SERVERINFO);
     json_end_object(json);
 
-    char * json_str = strndup(wpabuf_head(json), wpabuf_len(json));
+    json_str = strndup(wpabuf_head(json), wpabuf_len(json));
     len = os_strlen(json_str);
 
     resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB, len, EAP_CODE_REQUEST, id);
@@ -1981,6 +1989,7 @@ static struct wpabuf * eap_noob_req_noobid(struct eap_noob_server_context * data
 {
     struct wpabuf * json = NULL;
     struct wpabuf * resp = NULL;
+    char * json_str = NULL;
     size_t len = 100 + strlen(TYPE) + strlen(PEERID) + MAX_PEER_ID_LEN;
 
     if (!data) {
@@ -2001,7 +2010,7 @@ static struct wpabuf * eap_noob_req_noobid(struct eap_noob_server_context * data
     json_add_string(json, PEERID, data->peer_attr->PeerId);
     json_end_object(json);
 
-    char * json_str = strndup(wpabuf_head(json), wpabuf_len(json));
+    json_str = strndup(wpabuf_head(json), wpabuf_len(json));
     len = os_strlen(json_str);
 
     resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB, len, EAP_CODE_REQUEST, id);
@@ -2027,6 +2036,7 @@ static struct wpabuf * eap_noob_req_type_nine(struct eap_noob_server_context * d
 {
     struct wpabuf * json = NULL;
     struct wpabuf * resp = NULL;
+    char * json_str = NULL;
     size_t len = 100 + strlen(TYPE);
 
     if (!data) {
@@ -2043,7 +2053,7 @@ static struct wpabuf * eap_noob_req_type_nine(struct eap_noob_server_context * d
     json_add_int(json, TYPE, EAP_NOOB_TYPE_9);
     json_end_object(json);
 
-    char * json_str = strndup(wpabuf_head(json), wpabuf_len(json));
+    json_str = strndup(wpabuf_head(json), wpabuf_len(json));
     len = os_strlen(json_str);
 
     resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB, len, EAP_CODE_REQUEST, id);
