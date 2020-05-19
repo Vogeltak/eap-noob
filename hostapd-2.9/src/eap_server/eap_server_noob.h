@@ -1,12 +1,6 @@
 #ifndef EAPOOB_H
 #define EAPOOB_H
 
-#include <stdint.h>
-#include <unistd.h>
-#include <sqlite3.h>
-#include <jansson.h>
-#include <time.h>
-
 /* Configuration file */
 #define CONF_FILE               "eapnoob.conf"
 
@@ -29,8 +23,9 @@
 #define MAX_SUP_CSUITES         10
 #define MAX_CONF_LEN            500
 #define MAX_INFO_LEN            500
-#define MAX_PEERID_LEN          22
+#define MAX_PEER_ID_LEN         22
 #define MAX_LINE_SIZE           1000
+#define MAX_MAC_INPUT_LEN       1500
 
 #define KDF_LEN                 320
 #define MSK_LEN                 64
@@ -48,7 +43,7 @@
 #define INVALID                 0
 #define VALID                   1
 #define NUM_OF_STATES           5
-#define MAX_MSG_TYPES           8
+#define MAX_MSG_TYPES           9
 
 /* OOB DIRECTIONS */
 #define PEER_TO_SERVER          1
@@ -65,6 +60,12 @@
 /* Maximum allowed waiting exchages */
 #define MAX_WAIT_EXCHNG_TRIES   5
 
+/* Keying modes, as defined in Table 3 of draft 8 */
+#define KEYING_COMPLETION_EXCHANGE 0
+#define KEYING_RECONNECT_EXCHANGE_NO_ECDHE 1
+#define KEYING_RECONNECT_EXCHANGE_ECDHE 2
+#define KEYING_RECONNECT_EXCHANGE_NEW_CRYPTOSUITE 3
+
 /* keywords for json encoding and decoding */
 #define TYPE                    "Type"
 #define ERRORINFO               "ErrorInfo"
@@ -77,6 +78,7 @@
 #define SLEEPTIME               "SleepTime"
 #define PEERID                  "PeerId"
 #define PKS                     "PKs"
+#define PKS2					"PKs2"
 #define SERVERINFO              "ServerInfo"
 #define MACS                    "MACs"
 #define MACS2                   "MACs2"
@@ -89,8 +91,9 @@
 #define NP                      "Np"
 #define NP2                     "Np2"
 #define PKP                     "PKp"
+#define	PKP2                    "PKp2"
 #define PEERINFO                "PeerInfo"
-//#define PEERSTATE               "state"
+#define PEERSTATE               "PeerState"
 #define NOOBID                  "NoobId"
 #define MACP                    "MACp"
 #define MACP2                   "MACp2"
@@ -101,6 +104,7 @@
 #define REALM                   "Realm"
 #define SERVERINFO_NAME         "Name"
 #define SERVERINFO_URL          "Url"
+#define KEYINGMODE              "KeyingMode"
 
 #define ECDH_KDF_MAX            (1 << 30)
 
@@ -131,7 +135,7 @@
 #define TYPE_EIGHT_PARAMS       (PEERID_RCVD|NOOBID_RCVD)
 
 #define CONF_PARAMS             (DIRP_RCVD|CRYPTOSUITEP_RCVD|VERSION_RCVD|SERVER_NAME_RCVD|SERVER_URL_RCVD|WE_COUNT_RCVD|REALM_RCVD|ENCODE_RCVD)
-#define DB_NAME                 "/etc/peer_connection_db"
+#define DB_NAME                 "/tmp/noob_server.db"
 #define DEVICE_TABLE            "devices"
 
 #define CREATE_TABLES_EPHEMERALSTATE                \
@@ -170,13 +174,6 @@
     CreationTime BIGINT,                            \
     last_used_time BIGINT);"
 
-#define CREATE_TABLES_RADIUS                        \
-    "CREATE TABLE IF NOT EXISTS radius(             \
-    called_st_id TEXT,                              \
-    calling_st_id  TEXT,                            \
-    NAS_id TEXT,                                    \
-    user_name TEXT PRIMARY KEY)"
-
 #define DELETE_EPHEMERAL_FOR_PEERID                 \
     "DELETE FROM EphemeralNoob WHERE PeerId=?;      \
     DELETE FROM EphemeralState WHERE PeerId=?;"
@@ -207,13 +204,13 @@ enum {COMPLETION_EXCHANGE, RECONNECT_EXCHANGE, RECONNECT_EXCHANGE_NEW};
 enum {UNREGISTERED_STATE, WAITING_FOR_OOB_STATE, OOB_RECEIVED_STATE, RECONNECTING_STATE, REGISTERED_STATE};
 
 enum {NONE, EAP_NOOB_TYPE_1, EAP_NOOB_TYPE_2, EAP_NOOB_TYPE_3, EAP_NOOB_TYPE_4, EAP_NOOB_TYPE_5,
-    EAP_NOOB_TYPE_6, EAP_NOOB_TYPE_7, EAP_NOOB_TYPE_8};
+    EAP_NOOB_TYPE_6, EAP_NOOB_TYPE_7, EAP_NOOB_TYPE_8, EAP_NOOB_TYPE_9};
 
 enum {UPDATE_PERSISTENT_STATE, UPDATE_STATE_MINSLP, UPDATE_PERSISTENT_KEYS_SECRET, UPDATE_STATE_ERROR,
     UPDATE_INITIALEXCHANGE_INFO, GET_NOOBID};
 
-enum eap_noob_err_code{NO_ERROR, E1001, E1002, E1003, E1004, E1005, E1006, E1007, E2001, E2002, E3001,
-    E3002, E3003, E4001};
+enum eap_noob_err_code {NO_ERROR, E1001, E1002, E1003, E1004, E1007, E2001, E2002,
+                        E2003, E2004, E3001, E3002, E3003, E4001, E5001, E5002, E5003, E5004};
 
 enum {HOOB_TYPE, MACS_TYPE, MACP_TYPE};
 
@@ -262,8 +259,8 @@ struct eap_noob_ecdh_key_exchange {
     char * y_b64;
     size_t y_len;
 
-    json_t * jwk_serv;
-    json_t * jwk_peer;
+    char * jwk_serv;
+    char * jwk_peer;
 
     u8 * shared_key;
     char * shared_key_b64;
@@ -303,7 +300,6 @@ struct eap_noob_peer_data {
     struct eap_noob_oob_data * oob_data;
     struct eap_noob_ecdh_kdf_nonce * kdf_nonce_data;
     struct eap_noob_ecdh_kdf_out * kdf_out;
-    json_t * mac_input;
     char * mac_input_str;
 
     char * Realm;
@@ -323,7 +319,8 @@ struct eap_noob_server_data {
     u32 version[MAX_SUP_VER];
     u32 cryptosuite[MAX_SUP_CSUITES];
     u32 dir;
-    char * serverinfo;
+    u32 keying_mode;
+    char * server_info;
     u32 config_params;
     struct eap_noob_server_config_params * server_config_params;
 };
@@ -335,23 +332,27 @@ struct eap_noob_server_context {
     sqlite3 * server_db;
 };
 
-const int error_code[] = {0, 1001, 1002, 1003, 1004, 1005, 1006, 1007, 2001, 2002, 3001, 3002, 3003, 4001};
+const int error_code[] =  {0,1001,1002,1003,1004,1007,2001,2002,2003,2004,3001,3002,3003,4001,5001,5002,5003,5004};
 
-const char *error_info[] = {
+const char *error_info[] =  {
     "No error",
-    "Invalid NAI or peer state",
+    "Invalid NAI",
     "Invalid message structure",
     "Invalid data",
     "Unexpected message type",
-    "Unexpected peer identifier",
-    "Unrecognized OOB message identifier",
-    "Invalid ECDH key",
+    "Invalid ECDHE key",
     "Unwanted peer",
     "State mismatch, user action required",
+    "Unrecognized OOB message identifier",
+    "Unexpected peer identifier",
     "No mutually supported protocol version",
     "No mutually supported cryptosuite",
     "No mutually supported OOB direction",
-    "MAC verification failure" };
+    "HMAC verification failure",
+    "Application-specific error",
+    "Invalid server info",
+    "Invalid server URL",
+    "Invalid peer info"};
 
 
 /* This 2-D arry is used for state validation.
@@ -379,11 +380,11 @@ const int next_request_type[] = {
 
 /*server state vs message type matrix*/
 const int state_message_check[NUM_OF_STATES][MAX_MSG_TYPES] = {
-    {VALID, VALID,   VALID,   INVALID,  INVALID,  INVALID,  INVALID,  INVALID}, //UNREGISTERED_STATE
-    {VALID, VALID,   VALID,   VALID,    VALID,    INVALID,  INVALID,  INVALID}, //WAITING_FOR_OOB_STATE
-    {VALID, VALID,   VALID,   INVALID,  VALID,    INVALID,  INVALID,  INVALID}, //OOB_RECEIVED_STATE
-    {VALID, INVALID, INVALID, INVALID,  INVALID,  VALID,    VALID,    VALID},   //RECONNECT
-    {VALID, INVALID, INVALID, INVALID,  VALID,    INVALID,  INVALID,  INVALID}, //REGISTERED_STATE
+    {VALID, VALID,   VALID,   INVALID,  INVALID,  INVALID,  INVALID,  INVALID, VALID}, //UNREGISTERED_STATE
+    {VALID, VALID,   VALID,   VALID,    VALID,    INVALID,  INVALID,  INVALID, VALID}, //WAITING_FOR_OOB_STATE
+    {VALID, VALID,   VALID,   INVALID,  VALID,    INVALID,  INVALID,  INVALID, VALID}, //OOB_RECEIVED_STATE
+    {VALID, INVALID, INVALID, INVALID,  INVALID,  VALID,    VALID,    VALID,   VALID},   //RECONNECT
+    {VALID, INVALID, INVALID, INVALID,  VALID,    INVALID,  INVALID,  INVALID, VALID}, //REGISTERED_STATE
 };
 
 #define EAP_NOOB_STATE_VALID                                                              \
