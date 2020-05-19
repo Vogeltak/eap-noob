@@ -46,8 +46,8 @@
 #include <unistd.h>
 #include <string.h>
 #include <sqlite3.h>
-#include <jansson.h>
 #include "common.h"
+#include "json.h"
 #include "eap_i.h"
 #include "eap_noob.h"
 #include "../../wpa_supplicant/config.h"
@@ -68,7 +68,7 @@ static int eap_noob_Base64Decode(const char * b64message, unsigned char ** buffe
     size_t len = os_strlen(b64message);
     size_t b64pad = 4*((len + 3)/4) - len;
     char *temp = os_zalloc(len + b64pad + 1);
-    if (temp == NULL) 
+    if (temp == NULL)
 	    return -1;
     os_memcpy(temp, b64message, len);
     for(int i = 0; i < len; i++) {
@@ -77,7 +77,7 @@ static int eap_noob_Base64Decode(const char * b64message, unsigned char ** buffe
             else if (temp[i] == '_')
 		    temp[i] = '/';
     }
-    for(int i = 0; i < b64pad; i++) 
+    for(int i = 0; i < b64pad; i++)
 	    temp[len + i] = '=';
     size_t decodeLen;
     unsigned char *tempX;
@@ -105,9 +105,9 @@ int eap_noob_Base64Encode(const unsigned char * buffer, size_t length, char ** b
     if (tmp == NULL)
 	    return -1;
     for(int i = 0; i < len; i++) {
-	    if (tmp[i] == '+') 
+	    if (tmp[i] == '+')
 		    tmp[i] = '-';
-	    else if (tmp[i] == '/') 
+	    else if (tmp[i] == '/')
 		    tmp[i] = '_';
 	    else if (tmp[i] == '=') {
 		    tmp[i] = '\0';
@@ -265,7 +265,7 @@ static int eap_noob_gen_KDF(struct eap_noob_peer_context * data, int state)
         data->server_attr->kdf_out->msk = os_zalloc(MSK_LEN);
         data->server_attr->kdf_out->emsk = os_zalloc(EMSK_LEN);
         data->server_attr->kdf_out->amsk = os_zalloc(AMSK_LEN);
-        data->server_attr->kdf_out->MethodId = os_zalloc(METHOD_ID_LEN);        
+        data->server_attr->kdf_out->MethodId = os_zalloc(METHOD_ID_LEN);
         data->server_attr->kdf_out->Kms = os_zalloc(KMS_LEN);
         data->server_attr->kdf_out->Kmp = os_zalloc(KMP_LEN);
         data->server_attr->kdf_out->Kz = os_zalloc(KZ_LEN);
@@ -277,20 +277,20 @@ static int eap_noob_gen_KDF(struct eap_noob_peer_context * data, int state)
         memcpy(data->server_attr->kdf_out->amsk, out + counter, AMSK_LEN);
         counter += AMSK_LEN;
         memcpy(data->server_attr->kdf_out->MethodId, out + counter, METHOD_ID_LEN);
-        counter += METHOD_ID_LEN;        
+        counter += METHOD_ID_LEN;
         memcpy(data->server_attr->kdf_out->Kms, out + counter, KMS_LEN);
         counter += KMS_LEN;
         memcpy(data->server_attr->kdf_out->Kmp, out + counter, KMP_LEN);
         counter += KMP_LEN;
         memcpy(data->server_attr->kdf_out->Kz, out + counter, KZ_LEN);
 
-//Copy it to the peer_context also. Kz is used reconnect exchange. 
+//Copy it to the peer_context also. Kz is used reconnect exchange.
         if(state == COMPLETION_EXCHANGE) {
             data->peer_attr->Kz = os_zalloc(KZ_LEN);
             memcpy(data->peer_attr->Kz, out + counter, KZ_LEN);
         }
         counter += KZ_LEN;
-    } else { 
+    } else {
     	wpa_printf(MSG_DEBUG, "EAP-NOOB: Error in allocating memory, %s", __func__);
     	return FAILURE;
     }
@@ -298,33 +298,64 @@ static int eap_noob_gen_KDF(struct eap_noob_peer_context * data, int state)
 }
 
 /**
- * eap_noob_prepare_peer_info_json : Create a Json object for peer information.
+ * eap_noob_prepare_peer_info_json : Append a Json object for peer information.
  * @data : peer context.
- * returns : reference to a new object or NULL.
+ * @json : wpabuf json object to which the peer info object should be appended.
+ * @name : name for the peer info json object, or NULL.
 **/
-static json_t * eap_noob_prepare_peer_info_json(struct eap_sm * sm, struct eap_noob_peer_config_params * data)
+static void eap_noob_prepare_peer_info_json(struct eap_sm * sm, struct eap_noob_peer_config_params * data, struct wpabuf * json, char * name)
 {
-    json_t * info_obj = NULL;
     struct wpa_supplicant * wpa_s = (struct wpa_supplicant *) sm->msg_ctx;
-    char bssid[18] = {0}; int err = 0;
+    char bssid[18] = {0};
 
-    if (NULL == data) {
-        wpa_printf(MSG_DEBUG, "EAP-NOOB: Input arguments NULL for function %s",__func__); return NULL;
+    if (!data) {
+        wpa_printf(MSG_DEBUG, "EAP-NOOB: Input arguments NULL for function %s",__func__);
+        return;
     }
-    err -= (NULL == (info_obj = json_object()));
-    err += json_object_set_new(info_obj, PEER_MAKE,json_string(data->Peer_name));
-    err += json_object_set_new(info_obj, PEER_TYPE,json_string(eap_noob_globle_conf.peer_type));
-    err += json_object_set_new(info_obj, PEER_SERIAL_NUM,json_string(data->Peer_ID_Num));
-    err += json_object_set_new(info_obj, PEER_SSID,json_string((char *)wpa_s->current_ssid->ssid));
+
+    json_start_object(json, name);
+    json_add_string(json, PEER_MAKE, data->Peer_name);
+    json_value_sep(json);
+    json_add_string(json, PEER_TYPE, eap_noob_globle_conf.peer_type);
+    json_value_sep(json);
+    json_add_string(json, PEER_SERIAL_NUM, data->Peer_ID_Num);
+    json_value_sep(json);
+    json_add_string(json, PEER_SSID, (char *) wpa_s->current_ssid->ssid);
+    json_value_sep(json);
+
     sprintf(bssid,"%x:%x:%x:%x:%x:%x",wpa_s->current_ssid->bssid[0],wpa_s->current_ssid->bssid[1],
             wpa_s->current_ssid->bssid[2],wpa_s->current_ssid->bssid[3],wpa_s->current_ssid->bssid[4],
             wpa_s->current_ssid->bssid[5]);
-    err += json_object_set_new(info_obj,PEER_BSSID,json_string(bssid));
-    if (err < 0) {
-        wpa_printf(MSG_DEBUG, "EAP-NOOB: Unexpected error in preparing jon object");
-        json_decref(info_obj); return NULL;
+
+    json_add_string(json, PEER_BSSID, bssid);
+    json_end_object(json);
+}
+
+/**
+ * Generate a string representation of a JSON peer information object.
+ * @data: peer context
+ */
+static char * eap_noob_prepare_peer_info_string(struct eap_sm * sm,
+        struct eap_noob_peer_config_params * data)
+{
+    struct wpabuf * json = NULL;
+    char * resp = NULL;
+
+    json = wpabuf_alloc(MAX_INFO_LEN);
+    if (!json) {
+        wpa_printf(MSG_ERROR, "EAP-NOOB: Failed to allocate memory for JSON wpabuf");
+        return NULL;
     }
-    return info_obj;
+
+    // Append JSON peer info object without a name
+    eap_noob_prepare_peer_info_json(sm, data, json, NULL);
+
+    // Get a string representation of the JSON object
+    resp = strndup(wpabuf_head(json), wpabuf_len(json));
+
+    wpabuf_free(json);
+
+    return resp;
 }
 
 /**
@@ -363,42 +394,62 @@ EXIT:
 }
 
 static int eap_noob_encode_vers_cryptosuites(struct eap_noob_peer_context * data,
-        json_t ** Vers, json_t ** Cryptosuites)
+        char ** Vers, char ** Cryptosuites)
 {
-    int err = 0;
-    if (NULL == Vers || NULL == Cryptosuites) return FAILURE;
-    err -= (NULL == (*Vers = json_array()));
-    for (int i = 0; i < MAX_SUP_VER; ++i) {
-        err += json_array_append_new(*Vers, json_integer(data->server_attr->version[i]));
+    struct wpabuf * vers = wpabuf_alloc(100);
+    struct wpabuf * cryptosuites = wpabuf_alloc(100);
+
+    if (!vers || !cryptosuites) {
+        wpa_printf(MSG_DEBUG, "EAP-NOOB: JSON allocation for Vers and Cryptosuites failed");
+        return FAILURE;
     }
 
-    err -= (NULL == (*Cryptosuites = json_array()));
-    for (int i = 0; i < MAX_SUP_CSUITES ; i++) {
-        err += json_array_append_new(*Cryptosuites, json_integer(data->server_attr->cryptosuite[i]));
+    // Populate the vers array
+    json_start_array(vers, NULL);
+    for (int i = 0; i < MAX_SUP_VER; i++) {
+        wpabuf_printf(vers, "%s%u", i ? "," : "", data->server_attr->version[i]);
     }
-    if (err < 0) {
-        json_decref(*Vers); json_decref(*Cryptosuites); return FAILURE;
+    json_end_array(vers);
+
+    // Populate the cryptosuites array
+    json_start_array(cryptosuites, NULL);
+    for (int i = 0; i < MAX_SUP_CSUITES; i++) {
+        wpabuf_printf(cryptosuites, "%s%u", i ? "," : "", data->server_attr->cryptosuite[i]);
     }
+    json_end_array(cryptosuites);
+
+    // Duplicate strings to output pointers
+    *Vers = strndup(wpabuf_head(vers), wpabuf_len(vers));
+    *Cryptosuites = strndup(wpabuf_head(cryptosuites), wpabuf_len(cryptosuites));
+
     return SUCCESS;
 }
 
 static void eap_noob_decode_vers_cryptosuites(struct eap_noob_peer_context * data,
         const char * Vers, const char * Cryptosuites)
 {
-    json_t * Vers_obj, * Cryptosuites_obj, * value;
-    json_error_t  error;
-    int err = 0; size_t indx;
+    struct json_token * vers_obj = json_parse(Vers, os_strlen(Vers));
+    struct json_token * cryptosuites_obj = json_parse(Cryptosuites, os_strlen(Cryptosuites));
 
-    err -= (NULL == (Vers_obj = json_loads(Vers, JSON_COMPACT|JSON_PRESERVE_ORDER, &error)));
-    err -= (NULL == (Cryptosuites_obj = json_loads(Cryptosuites, JSON_COMPACT|JSON_PRESERVE_ORDER, &error)));
-    if (err < 0) {
-        wpa_printf(MSG_DEBUG, "EAP-NOOB: Unexpected error in allocating json objects");
-        return;
+    struct json_token * child = vers_obj->child;
+    int i = 0;
+
+    // Populate the version array
+    while (child) {
+        data->server_attr->version[i] = child->number;
+        child = child->sibling;
+        i++;
     }
-    json_array_foreach(Vers_obj, indx, value)
-        data->server_attr->version[indx] = json_integer_value(value);
-    json_array_foreach(Cryptosuites_obj, indx, value)
-        data->server_attr->cryptosuite[indx] = json_integer_value(value);
+
+    child = cryptosuites_obj->child;
+    i = 0;
+
+    // Populate the cryptosuite array
+    while (child) {
+        data->server_attr->cryptosuite[i] = child->number;
+        child = child->sibling;
+        i++;
+    }
 }
 
 
@@ -452,7 +503,7 @@ static void columns_ephemeralnoob(struct eap_noob_peer_context * data, sqlite3_s
 }
 
 /**
- * eap_noob_gen_MAC : generate a HMAC for user authentication.
+ * eap_noob_gen_MAC : generate an HMAC for user authentication.
  * @data : peer context
  * type  : MAC type
  * @key  : key to generate MAC
@@ -461,43 +512,149 @@ static void columns_ephemeralnoob(struct eap_noob_peer_context * data, sqlite3_s
  **/
 static u8 * eap_noob_gen_MAC(const struct eap_noob_peer_context * data, int type, u8 * key, int keylen, int state)
 {
-    u8 * mac = NULL; int err = 0;
-    json_t * mac_array, * emptystr = json_string(""); json_error_t error;
-    char * mac_str = os_zalloc(500);
+    u8 * mac = NULL;
+    struct wpabuf * mac_json;
+    char * nonce;
 
-    if(state == RECONNECT_EXCHANGE) {
-        data->server_attr->mac_input_str = json_dumps(data->server_attr->mac_input, JSON_COMPACT|JSON_PRESERVE_ORDER);
+    // TODO: Verify that all required information exists
+
+    // Allocate memory to the JSON string to be built
+    mac_json = wpabuf_alloc(MAX_MAC_INPUT_LEN);
+    if (!mac_json) {
+        wpa_printf(MSG_DEBUG, "EAP-NOOB: Failed to allocate memory for MAC JSON");
+        return NULL;
     }
 
-    if (NULL == data || NULL == data->server_attr || NULL == data->server_attr->mac_input_str ||
-        NULL == key) return NULL;
+    // Build the MAC input string from all components as specified in draft 8
+    // https://tools.ietf.org/html/draft-ietf-emu-eap-noob-00
+    json_start_array(mac_json, NULL);
 
-    err -= (NULL == (mac_array = json_loads(data->server_attr->mac_input_str, JSON_COMPACT|JSON_PRESERVE_ORDER, &error)));
-    if (type == MACS_TYPE)
-        err += json_array_set_new(mac_array, 0, json_integer(2));    
-    else
-        err += json_array_set_new(mac_array, 0, json_integer(1));
-    
-    if(state == RECONNECT_EXCHANGE) {
-        err += json_array_append_new(mac_array, emptystr);
-    }
-    else {
-        err += json_array_append_new(mac_array, json_string(data->server_attr->oob_data->Noob_b64));
+    // Integer to indicate whether this MAC is from the server or the peer
+    if (type == MACS_TYPE) {
+        wpabuf_printf(mac_json, "%u", 2);
+    } else {
+        wpabuf_printf(mac_json, "%u", 1);
     }
 
-    err -= (NULL == (mac_str = json_dumps(mac_array, JSON_COMPACT|JSON_PRESERVE_ORDER)));
-    if (err < 0) wpa_printf(MSG_DEBUG, "EAP-NOOB: Unexpected error in setting MAC");
+    // Versions supported by server
+    json_value_sep(mac_json);
+    json_start_array(mac_json, NULL);
+    for (int i = 0; i < MAX_SUP_VER; i++) {
+        wpabuf_printf(mac_json, "%s%u", i ? "," : "", data->server_attr->version[i]);
+    }
 
-    wpa_printf(MSG_DEBUG, "EAP-NOOB: Func (%s), MAC len = %d, MAC = %s", __func__, (int)os_strlen(mac_str),
-               mac_str);
-    wpa_hexdump_ascii(MSG_DEBUG, "EAP-NOOB: Key:", key, keylen);
-    mac = HMAC(EVP_sha256(), key, keylen, (u8 *)mac_str,
-            os_strlen(mac_str), NULL, NULL);
-    wpa_hexdump_ascii(MSG_DEBUG, "EAP-NOOB: MAC",mac,32);
-    os_free(mac_str);
+    // Version chosen by peer
+    wpabuf_printf(mac_json, ",%u", data->peer_attr->version);
+
+    // PeerId assigned by the server to the peer
+    wpabuf_printf(mac_json, ",\"%s\"", data->peer_attr->PeerId);
+
+    // Cryptosuites supported by the server
+    json_value_sep(mac_json);
+    json_start_array(mac_json, NULL);
+    for (int i = 0; i < MAX_SUP_CSUITES; i++) {
+        wpabuf_printf(mac_json, "%s%u", i ? "," : "", data->server_attr->cryptosuite[i]);
+    }
+
+    // Direction supported by the server
+    if (type == RECONNECT_EXCHANGE) {
+        wpabuf_printf(mac_json, ",\"\"");
+    } else {
+        wpabuf_printf(mac_json, ",%u", data->server_attr->dir);
+    }
+
+    // Server info object
+    if (type == RECONNECT_EXCHANGE) {
+        wpabuf_printf(mac_json, ",\"\"");
+    } else {
+        wpabuf_printf(mac_json, ",%s", data->server_attr->server_info);
+    }
+
+    // Cryptosuite chosen by peer
+    wpabuf_printf(mac_json, ",%u", data->peer_attr->cryptosuite);
+
+    // Direction supported by the peer
+    if (type == RECONNECT_EXCHANGE) {
+        wpabuf_printf(mac_json, ",\"\"");
+    } else {
+        wpabuf_printf(mac_json, ",%u", data->peer_attr->dir);
+    }
+
+    // If the Realm is specified, include it
+    // Otherwise, insert an empty string
+    if (data->server_attr->Realm) {
+        wpabuf_printf(mac_json, ",\"%s\"", data->server_attr->Realm);
+    } else {
+        wpabuf_printf(mac_json, ",\"\"");
+    }
+
+    // Peer info object
+    if (type == RECONNECT_EXCHANGE) {
+        wpabuf_printf(mac_json, ",\"\"");
+    } else {
+        wpabuf_printf(mac_json, ",%s", data->peer_attr->PeerInfo);
+    }
+
+    // KeyingMode
+    if (type == RECONNECT_EXCHANGE) {
+        wpabuf_printf(mac_json, ",%u", data->server_attr->keying_mode);
+    } else {
+        wpabuf_printf(mac_json, ",0");
+    }
+
+    // Public key server
+    if (type == RECONNECT_EXCHANGE) {
+        wpabuf_printf(mac_json, ",\"\"");
+    } else {
+        wpabuf_printf(mac_json, ",%s", data->server_attr->ecdh_exchange_data->jwk_serv);
+    }
+
+    // Server nonce
+    eap_noob_Base64Encode(data->server_attr->kdf_nonce_data->Ns, NONCE_LEN, &nonce);
+    wpabuf_printf(mac_json, ",\"%s\"", nonce);
+
+    // Public key peer
+    if (type == RECONNECT_EXCHANGE) {
+        wpabuf_printf(mac_json, ",\"\"");
+    } else {
+        wpabuf_printf(mac_json, ",%s", data->server_attr->ecdh_exchange_data->jwk_peer);
+    }
+
+    // Peer nonce
+    eap_noob_Base64Encode(data->server_attr->kdf_nonce_data->Np, NONCE_LEN, &nonce);
+    wpabuf_printf(mac_json, ",\"%s\"", nonce);
+
+    // Nonce out of band
+    if (type == RECONNECT_EXCHANGE) {
+        wpabuf_printf(mac_json, ",\"\"");
+    } else {
+        wpabuf_printf(mac_json, ",\"%s\"", data->server_attr->oob_data->Noob_b64);
+    }
+
+    json_end_array(mac_json);
+
+    // Dump to string
+    data->server_attr->mac_input_str = strndup(wpabuf_head(mac_json), wpabuf_len(mac_json));
+    if (!data->server_attr->mac_input_str) {
+        wpa_printf(MSG_ERROR, "EAP-NOOB: Failed to copy MAC input string");
+        return NULL;
+    }
+
+    wpabuf_free(mac_json);
+
+    wpa_printf(MSG_DEBUG, "EAP-NOOB: In %s: MAC=%s, length=%d", __func__,
+            data->server_attr->mac_input_str,
+            (int) os_strlen(data->server_attr->mac_input_str));
+
+    // Calculate MAC
+    mac = HMAC(EVP_sha256(), key, keylen,
+            (u8 *) data->server_attr->mac_input_str,
+            os_strlen(data->server_attr->mac_input_str), NULL, NULL);
+
+    wpa_hexdump_ascii(MSG_DEBUG, "EAP-NOOB: Generated MAC", mac, MAC_LEN);
+
     return mac;
 }
-
 
 static int eap_noob_derive_secret(struct eap_noob_peer_context * data, size_t * secret_len)
 {
@@ -535,7 +692,7 @@ static int eap_noob_derive_secret(struct eap_noob_peer_context * data, size_t * 
     if (EVP_PKEY_derive_set_peer(ctx, serverkey) <= 0) {
         wpa_printf(MSG_DEBUG, "EAP-NOOB: Failed to set peer key");
         ret = FAILURE; goto EXIT;
-    }	
+    }
 
     if (EVP_PKEY_derive(ctx, NULL, &skeylen) <= 0) {
         wpa_printf(MSG_DEBUG, "EAP-NOOB: Failed to get secret key len");
@@ -581,18 +738,18 @@ static int eap_noob_get_key(struct eap_noob_server_data * data)
 
 
 /*
-	Uncomment this code for using the test vectors of Curve25519 in RFC	7748. 
+	Uncomment this code for using the test vectors of Curve25519 in RFC	7748.
 	Peer = Bob
 	Server = Alice
 */
-    
+
 	char * priv_key_test_vector = "MC4CAQAwBQYDK2VuBCIEIF2rCH5iSopLeeF/i4OADuZvO7EpJhi2/Rwviyf/iODr";
     BIO* b641 = BIO_new(BIO_f_base64());
-    BIO* mem1 = BIO_new(BIO_s_mem());	
+    BIO* mem1 = BIO_new(BIO_s_mem());
     BIO_set_flags(b641,BIO_FLAGS_BASE64_NO_NL);
     BIO_puts(mem1,priv_key_test_vector);
     mem1 = BIO_push(b641,mem1);
-    
+
 
     wpa_printf(MSG_DEBUG, "EAP-NOOB: entering %s", __func__);
 
@@ -604,16 +761,16 @@ static int eap_noob_get_key(struct eap_noob_server_data * data)
 
     EVP_PKEY_keygen_init(pctx);
 
-    /* Generate X25519 key pair */       
+    /* Generate X25519 key pair */
     //EVP_PKEY_keygen(pctx, &data->ecdh_exchange_data->dh_key);
 
-/* 
+/*
 	If you are using the RFC 7748 test vector, you do not need to generate a key pair. Instead you use the
-    private key from the RFC. In this case, comment out the line above and uncomment the following line 
+    private key from the RFC. In this case, comment out the line above and uncomment the following line
     code
 */
     d2i_PrivateKey_bio(mem1,&data->ecdh_exchange_data->dh_key);
-    
+
     PEM_write_PrivateKey(stdout, data->ecdh_exchange_data->dh_key,
                          NULL, NULL, 0, NULL, NULL);
     PEM_write_PUBKEY(stdout, data->ecdh_exchange_data->dh_key);
@@ -627,10 +784,10 @@ static int eap_noob_get_key(struct eap_noob_server_data * data)
     pub_key_char = os_zalloc(MAX_X25519_LEN);
     pub_key_len = BIO_read(mem_pub, pub_key_char, MAX_X25519_LEN);
 
-/* 
- * This code removes the openssl internal ASN encoding and only keeps the 32 bytes of curve25519  
+/*
+ * This code removes the openssl internal ASN encoding and only keeps the 32 bytes of curve25519
  * public key which is then encoded in the JWK format and sent to the other party. This code may
- * need to be updated when openssl changes its internal format for public-key encoded in PEM. 
+ * need to be updated when openssl changes its internal format for public-key encoded in PEM.
 */
     unsigned char * pub_key_char_asn_removed = pub_key_char + (pub_key_len-32);
     pub_key_len = 32;
@@ -691,145 +848,284 @@ static void eap_noob_verify_param_len(struct eap_noob_server_data * data)
     }
 }
 
+
+/**
+ * Dump a json token to a string.
+ * @json: output buffer to write the json string to
+ * @token: the json_token to dump
+ */
+static void json_token_to_string(struct wpabuf * json, struct json_token * token) {
+    struct json_token * sibling = token;
+    int element_nr = 0;
+
+    while (sibling) {
+        // Insert a value separator when this is not the first element
+        if (element_nr) {
+            json_value_sep(json);
+        }
+
+        switch (sibling->type) {
+            case JSON_OBJECT:
+                json_start_object(json, sibling->name);
+                json_token_to_string(json, sibling->child);
+                json_end_object(json);
+                break;
+            case JSON_ARRAY:
+                json_start_array(json, sibling->name);
+                struct json_token * child = sibling->child;
+                int i = 0;
+                while (child) {
+                    // Assume we are only dealing with arrays containing numbers or strings
+
+                    /*if (child->type == JSON_OBJECT || child->type == JSON_ARRAY) {
+                        struct wpabuf * child_json = wpabuf_alloc(wpabuf_size(json));
+                        if (!child_json) continue;
+
+                        json_token_to_string(child_json, child);
+                        char * child_str = strndup(wpabuf_head(child_json), wpabuf_len(child_json));
+                        printf("Generated child string: %s\n", child_str);
+
+                        wpabuf_printf(json, "%s%s", i ? "," : "", child_str);
+
+                        wpabuf_free(child_json);
+                        os_free(child_str);
+                    }*/
+                    if (child->type == JSON_STRING) {
+                        wpabuf_printf(json, "%s\"%s\"", i ? "," : "", child->string);
+                    } else if (child->type == JSON_NUMBER) {
+                        wpabuf_printf(json, "%s%u", i ? "," : "", child->number);
+                    }
+
+                    child = child->sibling;
+                    i++;
+                }
+                json_end_array(json);
+                break;
+            case JSON_STRING:
+                json_add_string(json, sibling->name, sibling->string);
+                break;
+            case JSON_NUMBER:
+                json_add_int(json, sibling->name, sibling->number);
+                break;
+            default:
+                ;
+        }
+
+        sibling = sibling->sibling;
+        element_nr++;
+    }
+}
+
+/**
+ * Wrapper function that dumps a json_token to a string.
+ * @token: the token to be dumped
+ * Returns: a string representation of the token
+ */
+static char * json_dump(struct json_token * token) {
+    struct wpabuf * dump = wpabuf_alloc(10000);
+    if (!dump) {
+        wpa_printf(MSG_DEBUG, "EAP-NOOB: Failed to allocate memory in %s", __func__);
+        return NULL;
+    }
+
+    json_token_to_string(dump, token);
+
+    char * str = strndup(wpabuf_head(dump), wpabuf_len(dump));
+
+    wpabuf_free(dump);
+
+    return str;
+}
+
 /**
  * eap_noob_decode_obj : Decode parameters from incoming messages
  * @data : peer context
- * @req_obj : incoming json object with message parameters
+ * @root : incoming json object with message parameters
 **/
-static void  eap_noob_decode_obj(struct eap_noob_server_data * data, json_t * req_obj)
+static void eap_noob_decode_obj(struct eap_noob_server_data * data, struct json_token * root)
 {
-    const char * key = NULL;
-    char * retval_char = NULL, * dump_str = NULL;
-    size_t arr_index, decode_length;
-    json_t * arr_value, * value;
-    json_error_t  error;
-    int retval_int = 0;
+    struct json_token * child = NULL;
+    char * key = NULL;
+    struct json_token * el = NULL;
+    char * val_str = NULL;
+    int val_int;
 
-    if (NULL == req_obj || NULL == data) {
+    if (!data || !root) {
         wpa_printf(MSG_DEBUG, "EAP-NOOB: Input arguments NULL for function %s", __func__);
-        return;
+        goto EXIT;
+    }
+
+    if (root->type != JSON_OBJECT) {
+        wpa_printf(MSG_DEBUG, "EAP-NOOB: Request data does not have a JSON object as root");
+        goto EXIT;
     }
 
     wpa_printf(MSG_DEBUG, "EAP-NOOB: Entering %s", __func__);
-    json_object_foreach(req_obj, key, value) {
-        switch(json_typeof(value)) {
+
+    // Loop over all children of the JSON root object
+    child = root->child;
+    while (child) {
+        key = child->name;
+
+        switch (child->type) {
             case JSON_OBJECT:
-                if (0 == os_strcmp(key, PKS)) {
-                    dump_str = json_dumps(value,JSON_COMPACT|JSON_PRESERVE_ORDER);
-                    data->ecdh_exchange_data->jwk_serv = json_loads(dump_str, JSON_COMPACT|JSON_PRESERVE_ORDER, &error);
-                    wpa_printf(MSG_DEBUG, "EAP-NOOB:Copy Verify %s", dump_str);
-                    os_free(dump_str);
-
-                    if (NULL == data->ecdh_exchange_data->jwk_serv) {
+                // Pks or Pks2
+                if (!os_strcmp(key, PKS) || !os_strcmp(key, PKS2)) {
+                    data->ecdh_exchange_data->jwk_serv = json_dump(child);
+                    if (!data->ecdh_exchange_data->jwk_serv) {
                         data->err_code = E1003;
-                        return;
+                        goto EXIT;
                     }
-                    data->rcvd_params |= PKEY_RCVD;
-                } else if (0 == os_strcmp(key, PKS2)) {
-                    dump_str = json_dumps(value,JSON_COMPACT|JSON_PRESERVE_ORDER);
-                    data->ecdh_exchange_data->jwk_serv = json_loads(dump_str, JSON_COMPACT|JSON_PRESERVE_ORDER, &error);
-                    wpa_printf(MSG_DEBUG, "EAP-NOOB:Copy Verify %s", dump_str);
-                    os_free(dump_str);
 
-                    if (NULL == data->ecdh_exchange_data->jwk_serv) {
-                        data->err_code = E1003;
-                        return;
-                    }
+                    // Also decode the contents of the public key
+                    // to be stored for later use.
+                    eap_noob_decode_obj(data, child);
+
                     data->rcvd_params |= PKEY_RCVD;
-                } else if (0 == os_strcmp(key, SERVERINFO)) {
-                    data->server_info = json_dumps(value,JSON_COMPACT|JSON_PRESERVE_ORDER);
-                    if (NULL == data->server_info) {
-                        data->err_code = E5002;
-                        return;
+                }
+                // ServerInfo
+                else if (!os_strcmp(key, SERVERINFO)) {
+                    struct json_token * child_copy;
+                    memcpy(&child_copy, &child, sizeof(child));
+                    if (!child_copy) {
+                        wpa_printf(MSG_DEBUG, "EAP-NOOB: Error while copying json_token");
+                        goto EXIT;
                     }
+
+                    // Exclude name of the new root object from the JSON dump
+                    child_copy->name = NULL;
+                    data->server_info = json_dump(child_copy);
+
+                    wpa_printf(MSG_DEBUG, "EAP-NOOB: Server info: %s", data->server_info);
+
+                    // Free intermediate variable
+                    json_free(child_copy);
+
                     data->rcvd_params |= INFO_RCVD;
-                    wpa_printf(MSG_DEBUG,"EAP-NOOB: Serv Info %s",data->server_info);
-                }
-                eap_noob_decode_obj(data,value);
-                break;
-
-            case JSON_INTEGER:
-                if ((0 == (retval_int = json_integer_value(value))) && (0 != os_strcmp(key, TYPE)) &&
-                    (0 != os_strcmp(key, SLEEPTIME))) {
-                    data->err_code = E1003;
-                    return;
-                } else if (0 == os_strcmp(key, DIRS)) {
-                    data->dir = retval_int;
-                    data->rcvd_params |= DIRS_RCVD;
-                } else if (0 == os_strcmp(key, SLEEPTIME)) {
-                    data->minsleep = retval_int;
-                    //data->rcvd_params |= MINSLP_RCVD;
-                } else if (0 == os_strcmp(key, ERRORCODE)) {
-                    data->err_code = retval_int;
                 }
                 break;
+            case JSON_ARRAY:
+                // Vers
+                if (!os_strcmp(key, VERS)) {
+                    el = child->child;
+                    int i = 0;
 
+                    while (el) {
+                        data->version[i] = el->number;
+                        wpa_printf(MSG_DEBUG, "EAP-NOOB: Version array value = %d",
+                                data->version[i]);
+                        el = el->sibling;
+                        i++;
+                    }
+
+                    data->rcvd_params |= VERSION_RCVD;
+                }
+                // Cryptosuites
+                else if (!os_strcmp(key, CRYPTOSUITES)) {
+                    el = child->child;
+                    int i = 0;
+
+                    while (el) {
+                        data->cryptosuite[i] = el->number;
+                        wpa_printf(MSG_DEBUG, "EAP-NOOB: Cryptosuites array value = %d",
+                                data->cryptosuite[i]);
+                        el = el->sibling;
+                        i++;
+                    }
+                     data->rcvd_params |= CRYPTOSUITES_RCVD;
+                }
+                break;
             case JSON_STRING:
-                if (NULL == (retval_char = (char *)json_string_value(value))) {
+                val_str = child->string;
+                if (!val_str) {
                     data->err_code = E1003;
-                    return;
+                    goto EXIT;
                 }
-                if (0 == os_strcmp(key, PEERID)) {
-                    data->PeerId = os_strdup(retval_char);
-                    data->rcvd_params |= PEERID_RCVD;
 
+                // PeerId
+                if (!os_strcmp(key, PEERID)) {
+                    data->PeerId = os_strdup(val_str);
+                    data->rcvd_params |= PEERID_RCVD;
                 }
-                if (0 == os_strcmp(key, REALM)) {
+                // Realm
+                else if (!os_strcmp(key, REALM)) {
                     EAP_NOOB_FREE(data->Realm);
-                    data->Realm = os_strdup(retval_char);
-                    wpa_printf(MSG_DEBUG, "EAP-NOOB: Realm %s",data->Realm);
-                } else if ((0 == os_strcmp(key, NS)) || (0 == os_strcmp(key, NS2))) {
-                    decode_length = eap_noob_Base64Decode(retval_char, &data->kdf_nonce_data->Ns);
-                    if (decode_length) data->rcvd_params |= NONCE_RCVD;
-                } else if (0 == os_strcmp(key, HINT_SERV)) {
-                    data->oob_data->NoobId_b64 = os_strdup(retval_char);
+                    data->Realm = os_strdup(val_str);
+                    wpa_printf(MSG_DEBUG, "EAP-NOOB: Realm %s", data->Realm);
+                }
+                // Ns or Ns2
+                else if (!os_strcmp(key, NS) || !os_strcmp(key, NS2)) {
+                    size_t decode_len = eap_noob_Base64Decode(val_str, &data->kdf_nonce_data->Ns);
+                    if (decode_len) {
+                        data->rcvd_params |= NONCE_RCVD;
+                    }
+                }
+                // NoobId
+                else if (!os_strcmp(key, HINT_SERV)) {
+                    data->oob_data->NoobId_b64 = os_strdup(val_str);
                     wpa_printf(MSG_DEBUG, "EAP-NOOB: Received NoobId = %s", data->oob_data->NoobId_b64);
                     data->rcvd_params |= HINT_RCVD;
-                } else if ((0 == os_strcmp(key, MACS)) || (0 == os_strcmp(key, MACS2))) {
-                    wpa_printf(MSG_DEBUG, "EAP-NOOB: Received MAC %s", retval_char);
-                    decode_length = eap_noob_Base64Decode((char *)retval_char, (u8**)&data->MAC);
-                    data->rcvd_params |= MAC_RCVD;
-                } else if (0 == os_strcmp(key, X_COORDINATE)) {
-                    data->ecdh_exchange_data->x_serv_b64 = os_strdup(json_string_value(value));
+                }
+                // MACs or MACs2
+                else if (!os_strcmp(key, MACS) || !os_strcmp(key, MACS2)) {
+                    wpa_printf(MSG_DEBUG, "EAP-NOOB: Received MAC %s", val_str);
+                    size_t decode_len = eap_noob_Base64Decode((char *) val_str, (u8 **) &data->MAC);
+                    if (decode_len) {
+                        data->rcvd_params |= MAC_RCVD;
+                    }
+                }
+                // x
+                else if (!os_strcmp(key, X_COORDINATE)) {
+                    data->ecdh_exchange_data->x_serv_b64 = os_strdup(val_str);
                     wpa_printf(MSG_DEBUG, "X coordinate %s", data->ecdh_exchange_data->x_serv_b64);
-                } else if (0 == os_strcmp(key, Y_COORDINATE)) {
-                    data->ecdh_exchange_data->y_serv_b64 = os_strdup(json_string_value(value));
+                }
+                // y
+                else if (!os_strcmp(key, Y_COORDINATE)) {
+                    data->ecdh_exchange_data->y_serv_b64 = os_strdup(val_str);
                     wpa_printf(MSG_DEBUG, "Y coordinate %s", data->ecdh_exchange_data->y_serv_b64);
                 }
                 break;
-
-            case JSON_ARRAY:
-                if (0 == os_strcmp(key, VERS)) {
-                    json_array_foreach(value, arr_index, arr_value) {
-                        if (json_is_integer(arr_value)) {
-                            data->version[arr_index] = json_integer_value(arr_value);
-                            wpa_printf(MSG_DEBUG, "EAP-NOOB: Version array value = %d", data->version[arr_index]);
-                        } else {
-                            data->err_code = E1003; return;
-                        }
-                    }
-                    data->rcvd_params |= VERSION_RCVD;
-                } else if (0 == os_strcmp(key,CRYPTOSUITES)) {
-                    json_array_foreach(value, arr_index, arr_value) {
-                        if (json_is_integer(arr_value)) {
-                            data->cryptosuite[arr_index] = json_integer_value(arr_value);
-                            wpa_printf(MSG_DEBUG, "EAP-NOOB: Cryptosuites array value = %d", data->version[arr_index]);
-                        } else {
-                            data->err_code = E1003; return;
-                        }
-                    }
-                    data->rcvd_params |= CRYPTOSUITES_RCVD;
+            case JSON_NUMBER:
+                val_int = child->number;
+                if (!val_int && os_strcmp(key, TYPE) && os_strcmp(key, SLEEPTIME)) {
+                    data->err_code = E1003;
+                    goto EXIT;
+                }
+                // Dirs
+                else if (!os_strcmp(key, DIRS)) {
+                    data->dir = val_int;
+                    data->rcvd_params |= DIRS_RCVD;
+                }
+                // SleepTime
+                else if (!os_strcmp(key, SLEEPTIME)) {
+                    data->minsleep = val_int;
+                    //data->rcvd_params |= MINSLP_RCVD;
+                }
+                // KeyingMode
+                else if (!os_strcmp(key, KEYINGMODE)) {
+                    data->keying_mode = val_int;
+                }
+                // ErrorCode
+                else if (!os_strcmp(key, ERRORCODE)) {
+                    data->err_code = val_int;
                 }
                 break;
-
-            case JSON_REAL:
-            case JSON_TRUE:
-            case JSON_FALSE:
-            case JSON_NULL:
-                break;
+            default:
+                ;
         }
+
+        // Done handling this child,
+        // now update the reference to the next child of the JSON root object
+        child = child->sibling;
     }
+
     eap_noob_verify_param_len(data);
+EXIT:
+    os_free(val_str);
+    json_free(child);
+    json_free(el);
+    EAP_NOOB_FREE(key);
+    return;
 }
 
 /**
@@ -963,7 +1259,7 @@ static int eap_noob_exec_query(struct eap_noob_peer_context * data, const char *
     int query_type=0;
 
     wpa_printf(MSG_DEBUG, "EAP-NOOB: Entering %s, query - (%s), Number of arguments (%d)", __func__, query, num_args);
-    
+
     if(os_strstr(query,"SELECT"))
         query_type=1;
 
@@ -1091,8 +1387,7 @@ static int eap_noob_db_update(struct eap_noob_peer_context * data, u8 type)
 static int eap_noob_db_update_initial_exchange_info(struct eap_sm * sm, struct eap_noob_peer_context * data)
 {
     struct wpa_supplicant * wpa_s = NULL;
-    char query[MAX_QUERY_LEN] = {0}, * Vers_str, * Cryptosuites_str;
-    json_t * Vers = NULL, * Cryptosuites = NULL;
+    char query[MAX_QUERY_LEN] = {0}, * Vers, * Cryptosuites;
     int ret = 0, err = 0;
 
     if (NULL == data || NULL == sm) {
@@ -1101,20 +1396,18 @@ static int eap_noob_db_update_initial_exchange_info(struct eap_sm * sm, struct e
     wpa_printf(MSG_DEBUG, "EAP-NOOB: Entering %s",__func__);
     wpa_s = (struct wpa_supplicant *)sm->msg_ctx;
     err -= (FAILURE == eap_noob_encode_vers_cryptosuites(data, &Vers, &Cryptosuites));
-    err -= (NULL == (data->server_attr->mac_input_str = json_dumps(data->server_attr->mac_input, JSON_COMPACT|JSON_PRESERVE_ORDER)));
-    if (data->server_attr->mac_input)
+    //err -= (NULL == (data->server_attr->mac_input_str = json_dumps(data->server_attr->mac_input, JSON_COMPACT|JSON_PRESERVE_ORDER)));
+    if (data->server_attr->mac_input_str)
         wpa_printf(MSG_DEBUG, "EAP-NOOB: MAC str %s", data->server_attr->mac_input_str);
-    err -= (NULL == (Vers_str = json_dumps(Vers, JSON_COMPACT)));
-    err -= (NULL == (Cryptosuites_str = json_dumps(Cryptosuites, JSON_COMPACT|JSON_PRESERVE_ORDER)));
     if (err < 0) { ret = FAILURE; goto EXIT; }
 
     snprintf(query, MAX_QUERY_LEN,"INSERT INTO EphemeralState (Ssid, PeerId, Vers, Cryptosuites, Realm, Dirs, "
             "ServerInfo, Ns, Np, Z, MacInput, PeerState) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
     ret = eap_noob_exec_query(data, query, NULL, 27, TEXT, wpa_s->current_ssid->ssid, TEXT, data->server_attr->PeerId,
-            TEXT,  Vers_str, TEXT, Cryptosuites_str, TEXT, data->server_attr->Realm, INT, data->server_attr->dir,
+            TEXT,  Vers, TEXT, Cryptosuites, TEXT, data->server_attr->Realm, INT, data->server_attr->dir,
             TEXT, data->server_attr->server_info, BLOB, NONCE_LEN, data->server_attr->kdf_nonce_data->Ns, BLOB,
             NONCE_LEN, data->server_attr->kdf_nonce_data->Np, BLOB, ECDH_SHARED_SECRET_LEN,
-            data->server_attr->ecdh_exchange_data->shared_key, TEXT, data->server_attr->mac_input_str, INT,
+            data->server_attr->ecdh_exchange_data->shared_key, TEXT, "", INT,
             data->server_attr->state);
 
     if (FAILURE == ret) {
@@ -1122,15 +1415,13 @@ static int eap_noob_db_update_initial_exchange_info(struct eap_sm * sm, struct e
     }
 EXIT:
     wpa_printf(MSG_DEBUG, "EAP-NOOB: Exiting %s",__func__);
-    EAP_NOOB_FREE(Vers_str); EAP_NOOB_FREE(Cryptosuites_str);
-    json_decref(Vers); json_decref(Cryptosuites);
+    EAP_NOOB_FREE(Vers); EAP_NOOB_FREE(Cryptosuites);
     return ret;
 }
 
 static int eap_noob_update_persistentstate(struct eap_noob_peer_context * data)
 {
-    char query[MAX_QUERY_LEN] = {0}, * Vers_str, * Cryptosuites_str;
-    json_t * Vers = NULL, * Cryptosuites = NULL;
+    char query[MAX_QUERY_LEN] = {0}, * Vers, * Cryptosuites;
     int ret = SUCCESS, err = 0;
 
     if (NULL == data) { wpa_printf(MSG_DEBUG, "EAP-NOOB: Input to %s is null", __func__); return FAILURE; }
@@ -1138,8 +1429,6 @@ static int eap_noob_update_persistentstate(struct eap_noob_peer_context * data)
 
     err -= (FAILURE == eap_noob_db_statements(data->peer_db, DELETE_EPHEMERAL_FOR_ALL));
     err -= (FAILURE == eap_noob_encode_vers_cryptosuites(data, &Vers, &Cryptosuites));
-    err -= (NULL == (Vers_str = json_dumps(Vers, JSON_COMPACT|JSON_PRESERVE_ORDER)));
-    err -= (NULL == (Cryptosuites_str = json_dumps(Cryptosuites, JSON_COMPACT|JSON_PRESERVE_ORDER)));
     if (err < 0) { ret = FAILURE; goto EXIT; }
     /* snprintf(query, MAX_QUERY_LEN, "INSERT INTO PersistentState (Ssid, PeerId, Vers, Cryptosuites, Realm, Kz, "
         "creation_time, last_used_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"); */
@@ -1152,16 +1441,15 @@ static int eap_noob_update_persistentstate(struct eap_noob_peer_context * data)
     else
     	 wpa_printf(MSG_DEBUG, "Kz is somehow null and state %d", data->server_attr->state);
 
-   
+
 
     err -= (FAILURE == eap_noob_exec_query(data, query, NULL, 15, TEXT, data->server_attr->ssid, TEXT, data->server_attr->PeerId,
-            TEXT, Vers_str, TEXT, Cryptosuites_str, TEXT, data->server_attr->Realm, BLOB, KZ_LEN, data->server_attr->kdf_out->Kz,
+            TEXT, Vers, TEXT, Cryptosuites, TEXT, data->server_attr->Realm, BLOB, KZ_LEN, data->server_attr->kdf_out->Kz,
             INT, data->server_attr->state));
     if (err < 0) { ret = FAILURE; goto EXIT; }
 EXIT:
     wpa_printf(MSG_DEBUG, "EAP-NOOB: Exiting %s, return %d",__func__, ret);
-    EAP_NOOB_FREE(Vers_str); EAP_NOOB_FREE(Cryptosuites_str);
-    json_decref(Vers); json_decref(Cryptosuites);
+    EAP_NOOB_FREE(Vers); EAP_NOOB_FREE(Cryptosuites);
     return ret;
 }
 
@@ -1173,34 +1461,52 @@ EXIT:
 **/
 static struct wpabuf * eap_noob_err_msg(struct eap_noob_peer_context * data, u8 id)
 {
-    json_t * req_obj = NULL;
+    struct wpabuf * json = NULL;
     struct wpabuf * resp = NULL;
-    char * req_json = NULL;
-    size_t len = 0; int err = 0, code = 0;
+    char * json_str = NULL;
+    size_t len = 100 + strlen(TYPE) + strlen(ERRORCODE) + strlen(ERRORINFO);
+    size_t code = 0;
 
-    if (NULL == data || NULL == data->peer_attr || 0 == (code = data->server_attr->err_code)) {
-        wpa_printf(MSG_DEBUG, "EAP-NOOB: Input to %s is null", __func__);
-        return NULL;
+    if (!data || !data->peer_attr || !(code = data->server_attr->err_code)) {
+        wpa_printf(MSG_DEBUG, "EAP-NOOB: Input to %s is NULL", __func__);
+        goto EXIT;
     }
-    wpa_printf(MSG_DEBUG, "EAP-NOOB: Build error request");
 
-    err -= (NULL == (req_obj = json_object()));
-    if (data->peer_attr->PeerId)
-        err += json_object_set_new(req_obj,PEERID,json_string(data->peer_attr->PeerId));
-    err += json_object_set_new(req_obj, TYPE, json_integer(NONE));
-    err += json_object_set_new(req_obj, ERRORCODE, json_integer(error_code[code]));
-    err += json_object_set_new(req_obj, ERRORINFO, json_string(error_info[code]));
-    err -= (NULL == (req_json = json_dumps(req_obj,JSON_COMPACT|JSON_PRESERVE_ORDER)));
-    if (err < 0) goto EXIT;
-    wpa_printf(MSG_DEBUG, "EAP-NOOB: ERROR message = %s == %d", req_json, (int)strlen(req_json));
-    len = strlen(req_json)+1;
-    if (NULL == (resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB, len, EAP_CODE_RESPONSE, id))) {
-        wpa_printf(MSG_ERROR, "EAP-NOOB: Failed to allocate memory for NOOB ERROR message"); goto EXIT;
+    wpa_printf(MSG_DEBUG, "EAP-NOOB: Build error message");
+
+    len += strlen(error_info[code]);
+
+    json = wpabuf_alloc(len);
+    if (!json) {
+        goto EXIT;
     }
-    wpabuf_put_data(resp, req_json, len);
+
+    json_start_object(json, NULL);
+    json_add_int(json, TYPE, NONE);
+    json_value_sep(json);
+    if (data->peer_attr->PeerId) {
+        json_add_string(json, PEERID, data->peer_attr->PeerId);
+        json_value_sep(json);
+    }
+    json_add_int(json, ERRORCODE, error_code[code]);
+    json_value_sep(json);
+    json_add_string(json, ERRORINFO, error_info[code]);
+    json_end_object(json);
+
+    json_str = strndup(wpabuf_head(json), wpabuf_len(json));
+    len = os_strlen(json_str);
+
+    resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB, len, EAP_CODE_RESPONSE, id);
+    if (!resp) {
+        wpa_printf(MSG_DEBUG, "EAP-NOOB: Failed to allocate memory for error message response");
+        goto EXIT;
+    }
+
+    wpabuf_put_data(resp, json_str, len);
 EXIT:
-    json_decref(req_obj);
-    EAP_NOOB_FREE(req_json);
+    wpabuf_free(json);
+    if (json_str)
+        EAP_NOOB_FREE(json_str);
     return resp;
 }
 
@@ -1227,36 +1533,58 @@ static struct wpabuf * eap_noob_verify_PeerId(struct eap_noob_peer_context * dat
 **/
 static struct wpabuf * eap_noob_rsp_type_four(const struct eap_noob_peer_context * data, u8 id)
 {
-    json_t * rsp_obj = NULL;
+    struct wpabuf * json = NULL;
     struct wpabuf * resp = NULL;
-    char * resp_json = NULL, * mac_b64 = NULL;
-    size_t len = 0; int err = 0;
+    char * json_str = NULL;
+    size_t len = 100 + strlen(TYPE) + strlen(PEERID) + MAX_PEER_ID_LEN + strlen(MACP) + MAC_LEN;
+    char * mac_b64 = NULL;
     u8 * mac = NULL;
-    if (NULL == data) {
-        wpa_printf(MSG_DEBUG, "EAP-NOOB: Input arguments NULL for function %s",__func__);
+
+    if (!data) {
+        wpa_printf(MSG_DEBUG, "EAP-NOOB: Input arguments NULL for function %s", __func__);
         return NULL;
     }
-    wpa_printf(MSG_DEBUG, "EAP-NOOB: Entering %s", __func__);
-    mac = eap_noob_gen_MAC(data, MACP_TYPE, data->server_attr->kdf_out->Kmp, KMP_LEN, COMPLETION_EXCHANGE);
-    if (NULL == mac) goto EXIT;
-    err -= (FAILURE == eap_noob_Base64Encode(mac, MAC_LEN, &mac_b64));
-    err -= (NULL == (rsp_obj = json_object()));
-    err += json_object_set_new(rsp_obj, TYPE, json_integer(EAP_NOOB_TYPE_4));
-    err += json_object_set_new(rsp_obj, PEERID, json_string(data->server_attr->PeerId));
-    err += json_object_set_new(rsp_obj, MACP, json_string(mac_b64));
-    err -= (NULL == (resp_json = json_dumps(rsp_obj,JSON_COMPACT|JSON_PRESERVE_ORDER)));
-    if (err < 0) goto EXIT;
 
-    wpa_printf(MSG_DEBUG, "EAP-NOOB: Response %s = %d", resp_json, (int)strlen(resp_json));
-    len = strlen(resp_json)+1;
-    if (NULL == (resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB, len, EAP_CODE_RESPONSE, id))) {
-        wpa_printf(MSG_ERROR, "EAP-NOOB: Failed to allocate memory for Response/NOOB-IE"); goto EXIT;
+    wpa_printf(MSG_DEBUG, "EAP-NOOB: Entering %s", __func__);
+
+    mac = eap_noob_gen_MAC(data, MACP_TYPE, data->server_attr->kdf_out->Kmp,
+            KMP_LEN, COMPLETION_EXCHANGE);
+    if (!mac) {
+        goto EXIT;
     }
-    wpabuf_put_data(resp,resp_json,len);
+
+    if (FAILURE == eap_noob_Base64Encode(mac, MAC_LEN, &mac_b64)) {
+        goto EXIT;
+    }
+
+    json = wpabuf_alloc(len);
+    if (!json) {
+        goto EXIT;
+    }
+
+    json_start_object(json, NULL);
+    json_add_int(json, TYPE, EAP_NOOB_TYPE_4);
+    json_value_sep(json);
+    json_add_string(json, PEERID, data->server_attr->PeerId);
+    json_value_sep(json);
+    json_add_string(json, MACP, mac_b64);
+    json_end_object(json);
+
+    json_str = strndup(wpabuf_head(json), wpabuf_len(json));
+    len = os_strlen(json_str);
+
+    resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB, len, EAP_CODE_RESPONSE, id);
+    if (!resp) {
+        wpa_printf(MSG_DEBUG, "EAP-NOOB: Failed to allocate memory for Completion Response");
+        goto EXIT;
+    }
+
+    wpabuf_put_data(resp, json_str, len);
 EXIT:
-    EAP_NOOB_FREE(resp_json);
+    wpabuf_free(json);
+    if (json_str)
+        EAP_NOOB_FREE(json_str);
     EAP_NOOB_FREE(mac_b64);
-    json_decref(rsp_obj);
     return resp;
 }
 
@@ -1268,32 +1596,42 @@ EXIT:
 **/
 static struct wpabuf * eap_noob_rsp_type_three(const struct eap_noob_peer_context *data, u8 id)
 {
+    struct wpabuf * json = NULL;
     struct wpabuf * resp = NULL;
-    char * resp_json = NULL;
-    json_t * rsp_obj = NULL;
-    size_t len = 0; int err = 0;
+    char * json_str = NULL;
+    size_t len = 100 + strlen(TYPE) + strlen(PEERID) + MAX_PEER_ID_LEN;
 
     wpa_printf(MSG_DEBUG, "EAP-NOOB: OOB BUILD RESP TYPE 3");
     if (NULL == data) {
         wpa_printf(MSG_DEBUG, "EAP-NOOB: Input arguments NULL for function %s",__func__);
-        return NULL;
-    }
-
-    err -= (NULL == (rsp_obj = json_object()));
-    err += json_object_set_new(rsp_obj, TYPE, json_integer(EAP_NOOB_TYPE_3));
-    err += json_object_set_new(rsp_obj, PEERID, json_string(data->peer_attr->PeerId));
-    err -= (NULL == (resp_json = json_dumps(rsp_obj, JSON_COMPACT|JSON_PRESERVE_ORDER)));
-    if (err < 0) goto EXIT;
-    len = strlen(resp_json)+1;
-    err -= (NULL == (resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB, len, EAP_CODE_RESPONSE, id)));
-    if (err < 0) {
-        wpa_printf(MSG_ERROR, "EAP-NOOB: Failed to allocate memory for Response/NOOB-IE");
         goto EXIT;
     }
-    wpabuf_put_data(resp,resp_json,len);
+
+    json = wpabuf_alloc(len);
+    if (!json) {
+        goto EXIT;
+    }
+
+    json_start_object(json, NULL);
+    json_add_int(json, TYPE, EAP_NOOB_TYPE_3);
+    json_value_sep(json);
+    json_add_string(json, PEERID, data->peer_attr->PeerId);
+    json_end_object(json);
+
+    json_str = strndup(wpabuf_head(json), wpabuf_len(json));
+    len = os_strlen(json_str);
+
+    resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB, len, EAP_CODE_RESPONSE, id);
+    if (resp == NULL) {
+        wpa_printf(MSG_DEBUG, "EAP-NOOB: Failed to allocate memory for Response/NOOB-WE");
+        goto EXIT;
+    }
+
+    wpabuf_put_data(resp, json_str, len);
 EXIT:
-    EAP_NOOB_FREE(resp_json);
-    json_decref(rsp_obj);
+    wpabuf_free(json);
+    if (json_str)
+        EAP_NOOB_FREE(json_str);
     return resp;
 }
 
@@ -1301,22 +1639,43 @@ EXIT:
  *  eap_noob_build_JWK : Builds a JWK object to send in the inband message
  *  @jwk : output json object
  *  @x_64 : x co-ordinate in base64url format
- *  @y_64 : y co-ordinate in base64url format
  *  Returns : FAILURE/SUCCESS
 **/
-static int eap_noob_build_JWK( json_t ** jwk, const char * x_b64)
+static int eap_noob_build_JWK(char ** jwk, const char * x_b64)
 {
-    if (NULL == x_b64) {
-        wpa_printf(MSG_DEBUG, "EAP-NOOB: CO-ORDINATES are NULL!!"); return FAILURE;
+    struct wpabuf * json;
+    size_t len = 500;
+
+    if (!x_b64) {
+        wpa_printf(MSG_DEBUG, "EAP-NOOB: X-coordinate is NULL when building JWK");
+        return FAILURE;
     }
 
-    if (NULL == ((*jwk) = json_object())) {
-        wpa_printf(MSG_DEBUG, "EAP-NOOB: Error in JWK"); return FAILURE;
+    json = wpabuf_alloc(len);
+    if (!json) {
+        wpa_printf(MSG_DEBUG, "EAP-NOOB: Failed to allocate memory while building JWK");
+        return FAILURE;
     }
-    json_object_set_new((*jwk), KEY_TYPE, json_string("EC"));
-    json_object_set_new((*jwk), CURVE, json_string("Curve25519"));
-    json_object_set_new((*jwk), X_COORDINATE, json_string(x_b64));
-    wpa_printf(MSG_DEBUG, "JWK Key %s",json_dumps((*jwk),JSON_COMPACT|JSON_PRESERVE_ORDER));
+
+    json_start_object(json, NULL);
+    json_add_string(json, KEY_TYPE, "EC");
+    json_value_sep(json);
+    json_add_string(json, CURVE, "Curve25519");
+    json_value_sep(json);
+    json_add_string(json, X_COORDINATE, x_b64);
+    json_end_object(json);
+
+    *jwk = strndup(wpabuf_head(json), wpabuf_len(json));
+    if (!*jwk) {
+        wpa_printf(MSG_DEBUG, "EAP-NOOB: Failed to copy JWK");
+        wpabuf_free(json);
+        return FAILURE;
+    }
+
+    wpabuf_free(json);
+
+    wpa_printf(MSG_DEBUG, "EAP-NOOB: JWK key is %s", *jwk);
+
     return SUCCESS;
 }
 
@@ -1326,80 +1685,91 @@ static int eap_noob_build_JWK( json_t ** jwk, const char * x_b64)
  * @id   : response message id
  * Returns : pointer to message buffer or null
 **/
-
 static struct wpabuf * eap_noob_rsp_type_two(struct eap_noob_peer_context * data, u8 id)
 {
-    json_t * rsp_obj = NULL;
-    struct wpabuf *resp = NULL;
-    char * resp_json = NULL, * Np_b64 = NULL, * Ns_b64 = NULL;
-    size_t len = 0 ;
+    struct wpabuf * json = NULL;
+    struct wpabuf * resp = NULL;
+    char * json_str = NULL;
+    size_t len = 100 + strlen(TYPE) + strlen(PEERID) + MAX_PEER_ID_LEN
+        + strlen(PKP) + 500 + strlen(NP) + NONCE_LEN * 1.5;
     size_t secret_len = ECDH_SHARED_SECRET_LEN;
-    int err = 0;
+    char * Np_b64;
 
-    if (NULL == data) {
-        wpa_printf(MSG_DEBUG, "EAP-NOOB: Input arguments NULL for function %s",__func__);
-        return NULL;
+    if (!data) {
+        wpa_printf(MSG_DEBUG, "EAP-NOOB: Input arguments NULL for function %s", __func__);
+        goto EXIT;
     }
+
     wpa_printf(MSG_DEBUG, "EAP-NOOB: Entering %s", __func__);
+
+    // Generate peer nonce
     data->server_attr->kdf_nonce_data->Np = os_zalloc(NONCE_LEN);
     int rc = RAND_bytes(data->server_attr->kdf_nonce_data->Np, NONCE_LEN);
     unsigned long error = ERR_get_error();
     if (rc != 1) {
-        wpa_printf(MSG_DEBUG, "EAP-NOOB: Failed to generate nonce Error Code = %lu",error);
-        os_free(data->server_attr->kdf_nonce_data->Np); return NULL;
-    }
-    wpa_hexdump_ascii(MSG_DEBUG, "EAP-NOOB: Nonce", data->server_attr->kdf_nonce_data->Np, NONCE_LEN);
-
-    /* Generate Key material */
-    if (FAILURE == eap_noob_get_key(data->server_attr))  {
-        wpa_printf(MSG_DEBUG, "EAP-NOOB: Failed to generate keys"); goto EXIT;
+        wpa_printf(MSG_DEBUG, "EAP-NOOB: Failed to generate nonce. Error=%lu", error);
+        os_free(data->server_attr->kdf_nonce_data->Np);
+        goto EXIT;
     }
 
-    if (FAILURE == eap_noob_build_JWK(&data->server_attr->ecdh_exchange_data->jwk_peer,
-                   data->server_attr->ecdh_exchange_data->x_b64)) {
-        wpa_printf(MSG_DEBUG, "EAP-NOOB: Failed to build JWK"); goto EXIT;
-    }
+    // Encode the nonce in base 64
     eap_noob_Base64Encode(data->server_attr->kdf_nonce_data->Np, NONCE_LEN, &Np_b64);
     wpa_printf(MSG_DEBUG, "EAP-NOOB: Nonce %s", Np_b64);
 
-    err -= (NULL == (rsp_obj = json_object()));
-    err += json_object_set_new(rsp_obj,TYPE,json_integer(EAP_NOOB_TYPE_2));
-    err += json_object_set_new(rsp_obj,PEERID,json_string(data->peer_attr->PeerId));
-    err += json_object_set_new(rsp_obj,NP,json_string(Np_b64));
-    err += json_object_set_new(rsp_obj,PKP,data->server_attr->ecdh_exchange_data->jwk_peer);
-    err -= (NULL == (resp_json = json_dumps(rsp_obj, JSON_COMPACT|JSON_PRESERVE_ORDER)));
-    if (err < 0) goto EXIT;
+    // Generate key material
+    if (eap_noob_get_key(data->server_attr) == FAILURE) {
+        wpa_printf(MSG_DEBUG, "EAP-NOOB: Failed to generate keys");
+        goto EXIT;
+    }
 
-    len = strlen(resp_json)+1;
-    wpa_printf(MSG_DEBUG, "EAP-NOOB: Response %s = %d", resp_json, (int)strlen(resp_json));
+    // Build JWK to represent peer
+    if (FAILURE == eap_noob_build_JWK(&data->server_attr->ecdh_exchange_data->jwk_peer,
+                data->server_attr->ecdh_exchange_data->x_b64)) {
+        wpa_printf(MSG_DEBUG, "EAP-NOOB: Failed to build JWK in response type 2");
+        goto EXIT;
+    }
+
+    // Derive shared secret and encode in base 64
+    eap_noob_derive_secret(data, &secret_len);
+    data->server_attr->ecdh_exchange_data->shared_key_b64_len = eap_noob_Base64Encode(
+                data->server_attr->ecdh_exchange_data->shared_key,
+                ECDH_SHARED_SECRET_LEN,
+                &data->server_attr->ecdh_exchange_data->shared_key_b64
+            );
+
+    // Create JSON EAP message
+
+    json = wpabuf_alloc(len);
+    if (!json) {
+        wpa_printf(MSG_DEBUG, "EAP-NOOB: Failed to allocate memory for json response");
+        goto EXIT;
+    }
+
+    json_start_object(json, NULL);
+    json_add_int(json, TYPE, EAP_NOOB_TYPE_2);
+    json_value_sep(json);
+    json_add_string(json, PEERID, data->peer_attr->PeerId);
+    json_value_sep(json);
+    wpabuf_printf(json, "\"%s\":%s", PKP, data->server_attr->ecdh_exchange_data->jwk_peer);
+    json_value_sep(json);
+    json_add_string(json, NP, Np_b64);
+    json_end_object(json);
+
+    json_str = strndup(wpabuf_head(json), wpabuf_len(json));
+    len = os_strlen(json_str);
+
     resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB, len, EAP_CODE_RESPONSE, id);
-    if (resp == NULL) {
+    if (!resp) {
         wpa_printf(MSG_ERROR, "EAP-NOOB: Failed to allocate memory for Response/NOOB-IE");
         goto EXIT;
     }
 
-    wpabuf_put_data(resp, resp_json, len);
-    eap_noob_derive_secret(data, &secret_len);
-    data->server_attr->ecdh_exchange_data->shared_key_b64_len = \
-        eap_noob_Base64Encode(data->server_attr->ecdh_exchange_data->shared_key, ECDH_SHARED_SECRET_LEN,
-        &data->server_attr->ecdh_exchange_data->shared_key_b64);
-
-    /* Update MAC */
-    eap_noob_Base64Encode(data->server_attr->kdf_nonce_data->Ns, NONCE_LEN, &Ns_b64);
-    err -= (NULL == Ns_b64);
-    err += json_array_set(data->server_attr->mac_input, 10, data->peer_attr->PeerInfo);
-    err += json_array_set(data->server_attr->mac_input, 11, data->server_attr->ecdh_exchange_data->jwk_serv);
-    err += json_array_set_new(data->server_attr->mac_input, 12, json_string(Ns_b64));
-    err += json_array_set(data->server_attr->mac_input, 13, data->server_attr->ecdh_exchange_data->jwk_peer);
-    err += json_array_set_new(data->server_attr->mac_input, 14, json_string(Np_b64));
-    if (err < 0) wpa_printf(MSG_DEBUG, "EAP-NOOB: Unexpected error in setting MAC input values");
+    wpabuf_put_data(resp, json_str, len);
 EXIT:
-    json_decref(rsp_obj); EAP_NOOB_FREE(resp_json);
-    EAP_NOOB_FREE(Np_b64); EAP_NOOB_FREE(Ns_b64);
-    if (err < 0) {
-        wpabuf_free(resp);
-        return NULL;
-    }
+    wpabuf_free(json);
+    if (json_str)
+        EAP_NOOB_FREE(json_str);
+    EAP_NOOB_FREE(Np_b64);
     return resp;
 }
 
@@ -1411,68 +1781,106 @@ EXIT:
 **/
 static struct wpabuf * eap_noob_rsp_type_one(struct eap_sm *sm,const struct eap_noob_peer_context *data, u8 id)
 {
-    json_t * rsp_obj = NULL;
-    struct wpabuf *resp = NULL;
-    char * resp_json = NULL;
-    size_t len = 0; int err = 0;
+    struct wpabuf * json = NULL;
+    struct wpabuf * resp = NULL;
+    char * json_str = NULL;
+    size_t len = 100 + strlen(TYPE) + strlen(VERP) + strlen(PEERID) + MAX_PEER_ID_LEN
+        + strlen(CRYPTOSUITEP) + strlen(DIRP) + strlen(PEERINFO) + MAX_INFO_LEN;
 
-    if (NULL == data) {
+    wpa_printf(MSG_DEBUG, "EAP-NOOB: Building message response type 1");
+
+    if (!data) {
         wpa_printf(MSG_DEBUG, "EAP-NOOB: Input arguments NULL for function %s",__func__);
-        return NULL;
-    }
-    err -= (NULL == (rsp_obj = json_object()));
-    err += json_object_set_new(rsp_obj,TYPE,json_integer(EAP_NOOB_TYPE_1));
-    err += json_object_set_new(rsp_obj,VERP,json_integer(data->peer_attr->version));
-    err += json_object_set_new(rsp_obj,PEERID,json_string(data->server_attr->PeerId));
-    err += json_object_set_new(rsp_obj,CRYPTOSUITEP,json_integer(data->peer_attr->cryptosuite));
-    err += json_object_set_new(rsp_obj,DIRP,json_integer(data->peer_attr->dir));
-    err += json_object_set(rsp_obj,PEERINFO,data->peer_attr->PeerInfo);
-    err -= (NULL == (resp_json = json_dumps(rsp_obj, JSON_COMPACT|JSON_PRESERVE_ORDER)));
-    if (err < 0) {
-        wpa_printf(MSG_ERROR, "EAP-NOOB: error while generating json response for message type 1");
         goto EXIT;
     }
 
-    len = strlen(resp_json)+1;
-    wpa_printf(MSG_DEBUG, "EAP-NOOB: RESPONSE = %s = %d", resp_json, (int)strlen(resp_json));
-    if (NULL == (resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB,len , EAP_CODE_RESPONSE, id))) {
-        wpa_printf(MSG_ERROR, "EAP-NOOB: Failed to allocate memory for Response/NOOB-IE"); return NULL;
+    json = wpabuf_alloc(len);
+    if (!json) {
+        goto EXIT;
     }
-    wpabuf_put_data(resp,resp_json,len);
+
+    json_start_object(json, NULL);
+    json_add_int(json, TYPE, EAP_NOOB_TYPE_1);
+    json_value_sep(json);
+    json_add_int(json, VERP, data->peer_attr->version);
+    json_value_sep(json);
+    json_add_string(json, PEERID, data->server_attr->PeerId);
+    json_value_sep(json);
+    json_add_int(json, CRYPTOSUITEP, data->peer_attr->cryptosuite);
+    json_value_sep(json);
+    json_add_int(json, DIRP, data->peer_attr->dir);
+    json_value_sep(json);
+    eap_noob_prepare_peer_info_json(sm, data->peer_attr->peer_config_params,
+                                    json, PEERINFO);
+    json_end_object(json);
+
+    json_str = strndup(wpabuf_head(json), wpabuf_len(json));
+    len = os_strlen(json_str);
+
+    resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB, len, EAP_CODE_RESPONSE, id);
+    if (!resp) {
+        wpa_printf(MSG_ERROR, "EAP-NOOB: Failed to allocate memory for Response/NOOB-IE");
+        goto EXIT;
+    }
+
+    wpabuf_put_data(resp, json_str, len);
 EXIT:
-    json_decref(rsp_obj);
-    EAP_NOOB_FREE(resp_json);
+    wpabuf_free(json);
+    if (json_str)
+        EAP_NOOB_FREE(json_str);
     return resp;
 }
 
+/**
+ * eap_noob_rsp_type_eight : prepares message type eight
+ * @data : peer context
+ * @id   : response message id
+ * Returns : pointer to message buffer or null
+**/
 static struct wpabuf * eap_noob_rsp_type_eight(const struct eap_noob_peer_context * data, u8 id)
 {
-    json_t * rsp_obj = NULL;
-    struct wpabuf *resp = NULL;
-    char * resp_json = NULL;
-    size_t len = 0; int err = 0;
+    struct wpabuf * json = NULL;
+    struct wpabuf * resp = NULL;
+    char * json_str = NULL;
+    size_t len = 100 + strlen(TYPE) + strlen(PEERID) + MAX_PEER_ID_LEN
+        + strlen(HINT_PEER) + NOOBID_LEN;
 
-    if (NULL == data) {
+    wpa_printf(MSG_DEBUG, "EAP-NOOB: Building message response type 8");
+
+    if (!data) {
         wpa_printf(MSG_DEBUG, "EAP-NOOB: Input arguments NULL for function %s",__func__);
         return NULL;
     }
 
-    err -= (NULL == (rsp_obj = json_object()));
-    err += json_object_set_new(rsp_obj,TYPE,json_integer(EAP_NOOB_HINT));
-    err += json_object_set_new(rsp_obj,PEERID,json_string(data->server_attr->PeerId));
-    err += json_object_set_new(rsp_obj,HINT_PEER,json_string(data->server_attr->oob_data->NoobId_b64));
-    wpa_printf(MSG_DEBUG, "EAP-NOOB: Hint is %s", data->server_attr->oob_data->NoobId_b64);
-    err -= (NULL == (resp_json = json_dumps(rsp_obj,JSON_COMPACT|JSON_PRESERVE_ORDER)));
-    if (err < 0) goto EXIT;
-
-    len = strlen(resp_json)+1; wpa_printf(MSG_DEBUG, "EAP-NOOB: RESPONSE = %s", resp_json);
-    if (NULL == (resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB,len , EAP_CODE_RESPONSE, id))) {
-        wpa_printf(MSG_ERROR, "EAP-NOOB: Failed to allocate memory for Response/NOOB-IE"); return NULL;
+    json = wpabuf_alloc(len);
+    if (!json) {
+        goto EXIT;
     }
-    wpabuf_put_data(resp,resp_json,len);
+
+    json_start_object(json, NULL);
+    json_add_int(json, TYPE, EAP_NOOB_HINT);
+    json_value_sep(json);
+    json_add_string(json, PEERID, data->server_attr->PeerId);
+    json_value_sep(json);
+    json_add_string(json, HINT_PEER, data->server_attr->oob_data->NoobId_b64);
+    json_end_object(json);
+
+    wpa_printf(MSG_DEBUG, "EAP-NOOB: Hint is %s", data->server_attr->oob_data->NoobId_b64);
+
+    json_str = strndup(wpabuf_head(json), wpabuf_len(json));
+    len = os_strlen(json_str);
+
+    resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB, len, EAP_CODE_RESPONSE, id);
+    if (!resp) {
+        wpa_printf(MSG_DEBUG, "EAP-NOOB: Failed to allocate memory for NoobId hint response");
+        goto EXIT;
+    }
+
+    wpabuf_put_data(resp, json_str, len);
 EXIT:
-    json_decref(rsp_obj);
-    EAP_NOOB_FREE(resp_json);
+    wpabuf_free(json);
+    if (json_str)
+        EAP_NOOB_FREE(json_str);
     return resp;
 }
 
@@ -1481,43 +1889,51 @@ EXIT:
  * @data   : peer context
  * @id     : response message id
  * Returns : pointer to message buffer containing json response as string
- */ 
+ */
 static struct wpabuf * eap_noob_rsp_type_nine(const struct eap_noob_peer_context * data, u8 id)
 {
-    json_t * rsp_obj = NULL;
+    struct wpabuf * json = NULL;
     struct wpabuf * resp = NULL;
-    char * resp_json = NULL;
-    size_t len = 0;
-    int err = 0;
-    
-    if (NULL == data) {
-		wpa_printf(MSG_DEBUG, "EAP-NOOB: Input arguments NULL for function %s", __func__);
-		return NULL;
+    char * json_str = NULL;
+    size_t len = 100 + strlen(TYPE) + strlen(PEERID) + MAX_PEER_ID_LEN + strlen(PEERSTATE);
+
+    if (!data) {
+        wpa_printf(MSG_DEBUG, "EAP-NOOB: Input arguments NULL for function %s", __func__);
+        goto EXIT;
     }
-	
-    err -= (NULL == (rsp_obj = json_object()));
-    err += json_object_set_new(rsp_obj, TYPE, json_integer(EAP_NOOB_TYPE_9));
-    
+
+    json = wpabuf_alloc(len);
+    if (!json) {
+        goto EXIT;
+    }
+
+    json_start_object(json, NULL);
+    json_add_int(json, TYPE, EAP_NOOB_TYPE_9);
+    json_value_sep(json);
+
     // Only include PeerId if peer is not in Unregistered state (0)
     if (data->server_attr->state != UNREGISTERED_STATE) {
-        err += json_object_set_new(rsp_obj, PEERID,json_string(data->server_attr->PeerId));
+        json_add_string(json, PEERID, data->server_attr->PeerId);
+        json_value_sep(json);
     }
-    
-    err += json_object_set_new(rsp_obj, PEERSTATE, json_integer(data->server_attr->state));
-    err -= (NULL == (resp_json = json_dumps(rsp_obj,JSON_COMPACT|JSON_PRESERVE_ORDER)));
-    
-    if (err < 0) goto EXIT;
 
-    len = strlen(resp_json)+1;
-    wpa_printf(MSG_DEBUG, "EAP-NOOB: RESPONSE = %s", resp_json);
-    if (NULL == (resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB,len , EAP_CODE_RESPONSE, id))) {
-        wpa_printf(MSG_ERROR, "EAP-NOOB: Failed to allocate memory for Response/NOOB-IE"); 
-        return NULL;
+    json_add_int(json, PEERSTATE, data->server_attr->state);
+    json_end_object(json);
+
+    json_str = strndup(wpabuf_head(json), wpabuf_len(json));
+    len = os_strlen(json_str);
+
+    resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB, len, EAP_CODE_RESPONSE, id);
+    if (!resp) {
+        wpa_printf(MSG_DEBUG, "EAP-NOOB: Failed to allocate memory for handshake response");
+        goto EXIT;
     }
-    wpabuf_put_data(resp,resp_json,len);
+
+    wpabuf_put_data(resp, json_str, len);
 EXIT:
-    json_decref(rsp_obj);
-    EAP_NOOB_FREE(resp_json);
+    wpabuf_free(json);
+    if (json_str)
+        EAP_NOOB_FREE(json_str);
     return resp;
 }
 
@@ -1527,34 +1943,52 @@ EXIT:
  * @id   : response message id
  * Returns : pointer to message buffer or null
 **/
-static struct wpabuf * eap_noob_rsp_type_five(struct eap_sm *sm,const struct eap_noob_peer_context *data, u8 id)
+static struct wpabuf * eap_noob_rsp_type_five(struct eap_sm *sm, const struct eap_noob_peer_context *data, u8 id)
 {
-    json_t * rsp_obj = NULL;
-    struct wpabuf *resp = NULL;
-    char * resp_json = NULL;
-    size_t len = 0; int err = 0;
+    struct wpabuf * json = NULL;
+    struct wpabuf * resp = NULL;
+    char * json_str = NULL;
+    size_t len = 100 + strlen(VERP) + strlen(PEERID) + MAX_PEER_ID_LEN + strlen(CRYPTOSUITEP)
+        + strlen(PEERINFO) + MAX_INFO_LEN;
 
-    if (NULL == data) {
-        wpa_printf(MSG_DEBUG, "EAP-NOOB: Input arguments NULL for function %s",__func__); return NULL;
+    if (!data) {
+        wpa_printf(MSG_DEBUG, "EAP-NOOB: Input arguments NULL for function %s",__func__);
+        goto EXIT;
     }
 
-    err -= (NULL == (rsp_obj = json_object()));
-    err += json_object_set_new(rsp_obj, TYPE, json_integer(EAP_NOOB_TYPE_5));
-    err += json_object_set_new(rsp_obj, PEERID, json_string(data->server_attr->PeerId));
-    err += json_object_set_new(rsp_obj, CRYPTOSUITEP, json_integer(data->peer_attr->cryptosuite));
-    err += json_object_set_new(rsp_obj, PEERINFO, eap_noob_prepare_peer_info_json(sm, data->peer_attr->peer_config_params));
-    err -= (NULL == (resp_json = json_dumps(rsp_obj, JSON_COMPACT|JSON_PRESERVE_ORDER)));
-    if (err < 0) goto EXIT;
+    json = wpabuf_alloc(len);
+    if (!json) {
+        goto EXIT;
+    }
 
-    len = strlen(resp_json)+1; wpa_printf(MSG_DEBUG, "EAP-NOOB: RESPONSE = %s", resp_json);
+    json_start_object(json, NULL);
+    json_add_int(json, VERP, data->peer_attr->version);
+    json_value_sep(json);
+    json_add_int(json, TYPE, EAP_NOOB_TYPE_5);
+    json_value_sep(json);
+    json_add_string(json, PEERID, data->server_attr->PeerId);
+    json_value_sep(json);
+    json_add_int(json, CRYPTOSUITEP, data->peer_attr->cryptosuite);
+    json_value_sep(json);
+
+    // Helper method to add JSON object to the wpabuf
+    eap_noob_prepare_peer_info_json(sm, data->peer_attr->peer_config_params, json, PEERINFO);
+    json_end_object(json);
+
+    json_str = strndup(wpabuf_head(json), wpabuf_len(json));
+    len = os_strlen(json_str);
+
     resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB, len, EAP_CODE_RESPONSE, id);
-    if (resp == NULL) {
-        wpa_printf(MSG_ERROR, "EAP-NOOB: Failed to allocate memory for Response/NOOB-IE"); return NULL;
+    if (!resp) {
+        wpa_printf(MSG_ERROR, "EAP-NOOB: Failed to allocate memory for Reconnect Exchange Response");
+        goto EXIT;
     }
-    wpabuf_put_data(resp,resp_json,len);
+
+    wpabuf_put_data(resp, json_str, len);
 EXIT:
-    json_decref(rsp_obj);
-    EAP_NOOB_FREE(resp_json);
+    wpabuf_free(json);
+    if (json_str)
+        EAP_NOOB_FREE(json_str);
     return resp;
 }
 
@@ -1567,56 +2001,65 @@ EXIT:
 **/
 static struct wpabuf * eap_noob_rsp_type_six(struct eap_noob_peer_context * data, u8 id)
 {
-    json_t * rsp_obj = NULL;
-    struct wpabuf *resp = NULL;
-    char * resp_json = NULL, * Np_b64 = NULL, * Ns_b64;
-    unsigned long error;
-    size_t len = 0; int err = 0, rc;
+    struct wpabuf * json = NULL;
+    struct wpabuf * resp = NULL;
+    char * json_str = NULL;
+    size_t len = 100 + strlen(TYPE) + strlen(PEERID) + MAX_PEER_ID_LEN
+        + strlen(NP) + NONCE_LEN * 1.5;
+    char * Np_b64;
 
-    if (NULL == data) {
-        wpa_printf(MSG_DEBUG, "EAP-NOOB: Input arguments NULL for function %s",__func__);
-        return NULL;
+    if (!data) {
+        wpa_printf(MSG_DEBUG, "EAP-NOOB: Input arguments NULL for function %s", __func__);
+        goto EXIT;
     }
-    wpa_printf(MSG_DEBUG, "EAP-NOOB: OOB BUILD RESP TYPE 6");
 
+    wpa_printf(MSG_DEBUG, "EAP-NOOB: Entering %s", __func__);
+
+    // Generate peer nonce
     data->server_attr->kdf_nonce_data->Np = os_zalloc(NONCE_LEN);
-    rc = RAND_bytes(data->server_attr->kdf_nonce_data->Np, NONCE_LEN);
-    error = ERR_get_error();
-    if (rc != 1) {
-        wpa_printf(MSG_DEBUG, "EAP-NOOB: Failed to generate nonce Error Code = %lu", error);
+    int rc = RAND_bytes(data->server_attr->kdf_nonce_data->Np, NONCE_LEN);
+    unsigned long error = ERR_get_error();
+    if (rc != SUCCESS) {
+        wpa_printf(MSG_DEBUG, "EAP-NOOB: Failed to generate nonce. Error=%lu", error);
         os_free(data->server_attr->kdf_nonce_data->Np);
-        return NULL;
+        goto EXIT;
     }
 
-    wpa_hexdump_ascii(MSG_DEBUG, "EAP-NOOB: Nonce", data->server_attr->kdf_nonce_data->Np, NONCE_LEN);
+    // Encode the nonce in base 64
     eap_noob_Base64Encode(data->server_attr->kdf_nonce_data->Np, NONCE_LEN, &Np_b64);
-    err -= (NULL == (rsp_obj = json_object()));
-    err += json_object_set_new(rsp_obj,TYPE,json_integer(EAP_NOOB_TYPE_6));
-    err += json_object_set_new(rsp_obj,PEERID,json_string(data->peer_attr->PeerId));
-    err += json_object_set_new(rsp_obj,NP2,json_string(Np_b64));
-    err -= (NULL == (resp_json = json_dumps(rsp_obj, JSON_COMPACT|JSON_PRESERVE_ORDER)));
-    if (err < 0 ) goto EXIT;
+    wpa_printf(MSG_DEBUG, "EAP-NOOB: Nonce %s", Np_b64);
 
-    len = strlen(resp_json)+1; wpa_printf(MSG_DEBUG, "EAP-NOOB: Json %s", resp_json);
-    if (NULL == (resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB,len , EAP_CODE_RESPONSE, id))) {
-        wpa_printf(MSG_ERROR, "EAP-NOOB: Failed to allocate memory for Response/NOOB-IE"); goto EXIT;
+    // Create JSON EAP message
+
+    json = wpabuf_alloc(len);
+    if (!json) {
+        wpa_printf(MSG_DEBUG, "EAP-NOOB: Failed to allocate memory for json response");
+        goto EXIT;
     }
-    wpabuf_put_data(resp,resp_json,len);
-    eap_noob_Base64Encode(data->server_attr->kdf_nonce_data->Ns, NONCE_LEN, &Ns_b64);
-    err -= (NULL == Ns_b64);
-    err += json_array_set(data->server_attr->mac_input, 10, data->peer_attr->PeerInfo);
-    //err += json_array_set(data->server_attr->mac_input, 11, data->server_attr->ecdh_exchange_data->jwk_serv);
-    err += json_array_set_new(data->server_attr->mac_input, 12, json_string(Ns_b64));
-    //err += json_array_set(data->server_attr->mac_input, 13, data->server_attr->ecdh_exchange_data->jwk_peer);
-    err += json_array_set_new(data->server_attr->mac_input, 14, json_string(Np_b64));
-    if (err < 0) wpa_printf(MSG_DEBUG, "EAP-NOOB: Unexpected error in setting MAC input values");
+
+    json_start_object(json, NULL);
+    json_add_int(json, TYPE, EAP_NOOB_TYPE_6);
+    json_value_sep(json);
+    json_add_string(json, PEERID, data->peer_attr->PeerId);
+    json_value_sep(json);
+    json_add_string(json, NP2, Np_b64);
+    json_end_object(json);
+
+    json_str = strndup(wpabuf_head(json), wpabuf_len(json));
+    len = os_strlen(json_str);
+
+    resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB, len, EAP_CODE_RESPONSE, id);
+    if (!resp) {
+        wpa_printf(MSG_DEBUG, "EAP-NOOB: Failed to allocate memory for Response/RE");
+        goto EXIT;
+    }
+
+    wpabuf_put_data(resp, json_str, len);
 EXIT:
-    json_decref(rsp_obj); EAP_NOOB_FREE(resp_json);
-    EAP_NOOB_FREE(Np_b64); EAP_NOOB_FREE(Ns_b64);
-    if (err < 0) {
-        wpabuf_free(resp);
-        return NULL;
-    }
+    wpabuf_free(json);
+    if (json_str)
+        EAP_NOOB_FREE(json_str);
+    EAP_NOOB_FREE(Np_b64);
     return resp;
 }
 
@@ -1628,58 +2071,76 @@ EXIT:
 **/
 static struct wpabuf * eap_noob_rsp_type_seven(const struct eap_noob_peer_context * data, u8 id)
 {
-    json_t * rsp_obj = NULL;
-    struct wpabuf *resp = NULL;
-    char * resp_json = NULL;
-    size_t len = 0; int err = 0;
+    struct wpabuf * json = NULL;
+    struct wpabuf * resp = NULL;
+    char * json_str = NULL;
+    size_t len = 100 + strlen(TYPE) + strlen(PEERID) + MAX_PEER_ID_LEN + strlen(MACP2) + MAC_LEN;
     u8 * mac = NULL;
     char * mac_b64 = NULL;
 
-    if (NULL == data) {
+    if (!data) {
         wpa_printf(MSG_DEBUG, "EAP-NOOB: Input arguments NULL for function %s",__func__);
         return NULL;
     }
+
     wpa_printf(MSG_DEBUG, "EAP-NOOB: OOB BUILD RESP TYPE 7");
-    err -= (NULL == (rsp_obj = json_object()));
-    err -= (NULL == (mac = eap_noob_gen_MAC(data,MACP_TYPE,data->server_attr->kdf_out->Kmp, KMP_LEN,RECONNECT_EXCHANGE)));
-    err -= (FAILURE == eap_noob_Base64Encode(mac, MAC_LEN, &mac_b64));
-    err += json_object_set_new(rsp_obj,TYPE,json_integer(EAP_NOOB_TYPE_7));
-    err += json_object_set_new(rsp_obj,PEERID,json_string(data->peer_attr->PeerId));
-    err += json_object_set_new(rsp_obj,MACP2,json_string(mac_b64));
-    err -= (NULL == (resp_json = json_dumps(rsp_obj,JSON_COMPACT|JSON_PRESERVE_ORDER)));
-    if (err < 0) goto EXIT;
-    len = strlen(resp_json)+1;
-    if (NULL == (resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB,len , EAP_CODE_RESPONSE, id))) {
-        wpa_printf(MSG_ERROR, "EAP-NOOB: Failed to allocate memory for Response/NOOB-IE");
-        return NULL;
+
+    json = wpabuf_alloc(len);
+    if (!json) {
+        goto EXIT;
     }
-    wpabuf_put_data(resp,resp_json,len);
+
+    // Generate the MAC
+    mac = eap_noob_gen_MAC(data, MACP_TYPE, data->server_attr->kdf_out->Kmp, KMP_LEN, RECONNECT_EXCHANGE);
+    if (!mac) {
+        goto EXIT;
+    }
+
+    // Convert MAC to base 64
+    if (FAILURE == eap_noob_Base64Encode(mac, MAC_LEN, &mac_b64)) {
+        goto EXIT;
+    }
+
+    json_start_object(json, NULL);
+    json_add_int(json, TYPE, EAP_NOOB_TYPE_7);
+    json_value_sep(json);
+    json_add_string(json, PEERID, data->peer_attr->PeerId);
+    json_value_sep(json);
+    json_add_string(json, MACP2, mac_b64);
+    json_end_object(json);
+
+    json_str = strndup(wpabuf_head(json), wpabuf_len(json));
+    len = os_strlen(json_str);
+
+    resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB,len , EAP_CODE_RESPONSE, id);
+    if (!resp) {
+        wpa_printf(MSG_DEBUG, "EAP-NOOB: Failed to allocate memory for Response/NOOB-RE");
+        goto EXIT;
+    }
+
+    wpabuf_put_data(resp, json_str, len);
 EXIT:
-    json_decref(rsp_obj);
-    EAP_NOOB_FREE(resp_json);
+    wpabuf_free(json);
+    if (json_str)
+        EAP_NOOB_FREE(json_str);
     return resp;
 }
 
 /**
  * eap_noob_req_type_seven :  Decodes request type seven
  * @eap_sm : eap statemachine context
- * @req_obj : received request message object
  * @data : peer context
  * @id   : response message id
  * Returns : pointer to message buffer or null
 **/
-static struct wpabuf * eap_noob_req_type_seven(struct eap_sm * sm, json_t * req_obj, struct eap_noob_peer_context * data, u8 id)
+static struct wpabuf * eap_noob_req_type_seven(struct eap_sm * sm, struct eap_noob_peer_context * data, u8 id)
 {
     struct wpabuf * resp = NULL;
     u8 * mac = NULL;
 
     wpa_printf(MSG_DEBUG, "EAP-NOOB: Entering %s", __func__);
-    if (NULL == req_obj || NULL == data) {
+    if (!data) {
         wpa_printf(MSG_DEBUG, "EAP-NOOB: Input arguments NULL for function %s",__func__); return NULL;
-    }
-    eap_noob_decode_obj(data->server_attr, req_obj);
-    if (data->server_attr->err_code != NO_ERROR) {
-        resp = eap_noob_err_msg(data,id); return resp;
     }
     if (data->server_attr->rcvd_params != TYPE_SEVEN_PARAMS) {
         data->server_attr->err_code = E1002;
@@ -1687,7 +2148,7 @@ static struct wpabuf * eap_noob_req_type_seven(struct eap_sm * sm, json_t * req_
     }
     data->server_attr->rcvd_params = 0;
     if (NULL != (resp = eap_noob_verify_PeerId(data,id))) return resp;
-    
+
     /* Generate KDF and MAC */
     if (SUCCESS != eap_noob_gen_KDF(data,RECONNECT_EXCHANGE)) {
     	wpa_printf(MSG_ERROR, "EAP-NOOB: Error in KDF during Request/NOOB-FR"); return NULL;
@@ -1705,7 +2166,7 @@ static struct wpabuf * eap_noob_req_type_seven(struct eap_sm * sm, json_t * req_
     eap_noob_config_change(sm, data);
 
     if (FAILURE == eap_noob_db_update(data, UPDATE_PERSISTENT_STATE)) {
-        os_free(resp); return NULL;
+        wpabuf_free(resp); return NULL;
     }
     return resp;
 }
@@ -1713,26 +2174,19 @@ static struct wpabuf * eap_noob_req_type_seven(struct eap_sm * sm, json_t * req_
 /**
  * eap_noob_req_type_six :  Decodes request type six
  * @eap_sm : eap statemachine context
- * @req_obj : received request message object
  * @data : peer context
  * @id   : response message id
  * Returns : pointer to message buffer or null
 **/
-static struct wpabuf * eap_noob_req_type_six(struct eap_sm *sm, json_t * req_obj , struct eap_noob_peer_context *data, u8 id)
+static struct wpabuf * eap_noob_req_type_six(struct eap_sm *sm, struct eap_noob_peer_context *data, u8 id)
 {
     struct wpabuf * resp = NULL;
 
-    if (NULL == req_obj || NULL == data) {
+    if (!data) {
         wpa_printf(MSG_DEBUG, "EAP-NOOB: Input arguments NULL for function %s",__func__);
         return NULL;
     }
     wpa_printf(MSG_DEBUG, "EAP-NOOB: OOB PROCESS REQ TYPE 6");
-
-    eap_noob_decode_obj(data->server_attr,req_obj);
-    if (data->server_attr->err_code != NO_ERROR) {
-        resp = eap_noob_err_msg(data,id);
-        return resp;
-    }
 
     if (data->server_attr->rcvd_params != TYPE_SIX_PARAMS) {
         data->server_attr->err_code = E1002;
@@ -1751,31 +2205,24 @@ static struct wpabuf * eap_noob_req_type_six(struct eap_sm *sm, json_t * req_obj
 /**
  * eap_noob_req_type_five :  Decodes request type five
  * @eap_sm : eap statemachine context
- * @req_obj : received request message object
  * @data : peer context
  * @id   : response message id
  * Returns : pointer to message buffer or null
 **/
-static struct wpabuf * eap_noob_req_type_five(struct eap_sm *sm,json_t * req_obj , struct eap_noob_peer_context * data, u8 id)
+static struct wpabuf * eap_noob_req_type_five(struct eap_sm *sm, struct eap_noob_peer_context * data, u8 id)
 {
     struct wpabuf * resp = NULL;
-    int err = 0;
-    json_t * macinput = NULL, * Vers = NULL, * Cryptosuites = NULL, * emptystr = json_string("");
-    json_error_t error;
 
-    if (NULL == req_obj || NULL == data) {
+    if (!data) {
         wpa_printf(MSG_DEBUG, "EAP-NOOB: Input arguments NULL for function %s",__func__);
         return NULL;
     }
     wpa_printf(MSG_DEBUG, "EAP-NOOB: OOB PROCESS REQ TYPE 5");
-    eap_noob_decode_obj(data->server_attr,req_obj);
-    if (data->server_attr->err_code != NO_ERROR) {
-        resp = eap_noob_err_msg(data,id); return resp;
-    }
 
     if (data->server_attr->rcvd_params != TYPE_FIVE_PARAMS) {
         data->server_attr->err_code = E1002;
-        resp = eap_noob_err_msg(data,id); return resp;
+        resp = eap_noob_err_msg(data,id);
+        return resp;
     }
     data->peer_attr->PeerId = os_strdup(data->server_attr->PeerId);
     //TODO: handle eap_noob failure scenario
@@ -1784,33 +2231,7 @@ static struct wpabuf * eap_noob_req_type_five(struct eap_sm *sm,json_t * req_obj
     else
         resp = eap_noob_err_msg(data,id);
 
-    err -= (NULL == (Vers = json_array()));
-    for (int i = 0; i < MAX_SUP_VER; ++i)
-        err += json_array_append_new(Vers, json_integer(data->server_attr->version[i]));
-    err -= (NULL == (Cryptosuites = json_array()));
-    for (int i = 0; i < MAX_SUP_CSUITES ; i++)
-        err += json_array_append_new(Cryptosuites, json_integer(data->server_attr->cryptosuite[i]));
-    err -= (NULL == (macinput = json_array()));
-    err += json_array_append(macinput, emptystr);
-    err += json_array_append(macinput, Vers);
-    err += json_array_append_new(macinput, json_integer(data->peer_attr->version));
-    err += json_array_append_new(macinput, json_string(data->server_attr->PeerId));
-    err += json_array_append(macinput, Cryptosuites);
-    err += json_array_append(macinput, emptystr);
-    err += json_array_append_new(macinput, json_loads(data->server_attr->server_info, JSON_COMPACT|JSON_PRESERVE_ORDER, &error));
-    err += json_array_append_new(macinput, json_integer(data->peer_attr->cryptosuite));
-    err += json_array_append(macinput, emptystr);
-    err += json_array_append_new(macinput, json_string(data->server_attr->Realm));
-    err += json_array_append(macinput, emptystr);
-    err += json_array_append(macinput, emptystr);
-    err += json_array_append(macinput, emptystr);
-    err += json_array_append(macinput, emptystr);
-    err += json_array_append(macinput, emptystr);
-    data->server_attr->mac_input = macinput;
-    if (err < 0) wpa_printf(MSG_ERROR, "EAP-NOOB: Unexpected JSON processing error when creating mac input template.");
-
     data->server_attr->rcvd_params = 0;
-    json_decref(Vers); json_decref(Cryptosuites); json_decref(emptystr);
     return resp;
 }
 
@@ -1825,25 +2246,20 @@ static int eap_noob_exec_noobid_queries(struct eap_noob_peer_context * data)
 /**
  * eap_noob_req_type_four :  Decodes request type four
  * @eap_sm : eap statemachine context
- * @req_obj : received request message object
  * @data : peer context
  * @id   : response message id
  * Returns : pointer to message buffer or null
 **/
-static struct wpabuf * eap_noob_req_type_four(struct eap_sm * sm, json_t * req_obj, struct eap_noob_peer_context * data, u8 id)
+static struct wpabuf * eap_noob_req_type_four(struct eap_sm * sm, struct eap_noob_peer_context * data, u8 id)
 {
     struct wpabuf * resp = NULL;
     u8 * mac = NULL;
 
-    if (NULL == req_obj || NULL == data) {
+    if (!data) {
         wpa_printf(MSG_DEBUG, "EAP-NOOB: Input arguments NULL for function %s",__func__);
         return NULL;
     }
     wpa_printf(MSG_DEBUG, "EAP-NOOB: Entering %s", __func__);
-    eap_noob_decode_obj(data->server_attr, req_obj);
-    if (data->server_attr->err_code != NO_ERROR) {
-        resp = eap_noob_err_msg(data,id); return resp;
-    }
 
     if (data->server_attr->rcvd_params != TYPE_FOUR_PARAMS) {
         data->server_attr->err_code = E1002;
@@ -1853,10 +2269,10 @@ static struct wpabuf * eap_noob_req_type_four(struct eap_sm * sm, json_t * req_o
     /* Execute Hint query in peer to server direction */
     if (data->peer_attr->dir == PEER_TO_SERV){
        int ret = eap_noob_exec_noobid_queries(data);
-       if(ret == FAILURE || ret == EMPTY){ 
+       if(ret == FAILURE || ret == EMPTY){
         wpa_printf(MSG_DEBUG, "EAP-NOOB: Unrecognized NoobId");
         data->server_attr->err_code = E2003;
-        resp = eap_noob_err_msg(data,id); 
+        resp = eap_noob_err_msg(data,id);
         return resp;
        }
     }
@@ -1867,13 +2283,17 @@ static struct wpabuf * eap_noob_req_type_four(struct eap_sm * sm, json_t * req_o
     if (NULL != (resp = eap_noob_verify_PeerId(data, id))) return resp;
 
     mac = eap_noob_gen_MAC(data, MACS_TYPE, data->server_attr->kdf_out->Kms, KMS_LEN, COMPLETION_EXCHANGE);
-    if (NULL == mac) { os_free(resp); return NULL; }
+    if (!mac) {
+        wpabuf_free(resp);
+        return NULL;
+    }
 
     wpa_hexdump_ascii(MSG_DEBUG, "EAP-NOOB: MAC received ", data->server_attr->MAC, 32);
     wpa_hexdump_ascii(MSG_DEBUG, "EAP-NOOB: MAC calculated ", mac, 32);
     if (0 != os_memcmp(mac, data->server_attr->MAC, MAC_LEN)) {
         data->server_attr->err_code = E4001;
-        resp = eap_noob_err_msg(data,id); return resp;
+        resp = eap_noob_err_msg(data,id);
+        return resp;
     }
 
     resp = eap_noob_rsp_type_four(data, id);
@@ -1882,7 +2302,7 @@ static struct wpabuf * eap_noob_req_type_four(struct eap_sm * sm, json_t * req_o
     if (resp == NULL) wpa_printf(MSG_DEBUG, "EAP-NOOB: Null resp 4");
 
     if (FAILURE == eap_noob_update_persistentstate(data)) {
-        os_free(resp); return NULL;
+        wpabuf_free(resp); return NULL;
     }
     wpa_printf(MSG_DEBUG,"PEER ID IS STILL: %s",data->peer_attr->PeerId);
     return resp;
@@ -1891,23 +2311,18 @@ static struct wpabuf * eap_noob_req_type_four(struct eap_sm * sm, json_t * req_o
 /**
  * eap_noob_req_type_three :  Decodes request type three
  * @eap_sm : eap statemachine context
- * @req_obj : received request message object
  * @data : peer context
  * @id   : response message id
  * Returns : pointer to message buffer or null
 **/
-static struct wpabuf * eap_noob_req_type_three(struct eap_sm * sm, json_t * req_obj, struct eap_noob_peer_context * data, u8 id)
+static struct wpabuf * eap_noob_req_type_three(struct eap_sm * sm, struct eap_noob_peer_context * data, u8 id)
 {
     struct wpabuf * resp = NULL;
 
-    if (NULL == req_obj || NULL == data) {
+    if (!data) {
         wpa_printf(MSG_DEBUG, "EAP-NOOB: Input arguments NULL for function %s",__func__); return NULL;
     }
     wpa_printf(MSG_DEBUG, "EAP-NOOB: Entering %s", __func__);
-    eap_noob_decode_obj(data->server_attr,req_obj);
-    if (data->server_attr->err_code != NO_ERROR) {
-        resp = eap_noob_err_msg(data,id); return resp;
-    }
 
     if (data->server_attr->rcvd_params != TYPE_THREE_PARAMS) {
         data->server_attr->err_code = E1002;
@@ -1925,23 +2340,18 @@ static struct wpabuf * eap_noob_req_type_three(struct eap_sm * sm, json_t * req_
 /**
  * eap_noob_req_type_two :  Decodes request type two
  * @eap_sm : eap statemachine context
- * @req_obj : received request message object
  * @data : peer context
  * @id : pointer to response message buffer or null
 **/
-static struct wpabuf * eap_noob_req_type_two(struct eap_sm *sm, json_t * req_obj , struct eap_noob_peer_context * data, u8 id)
+static struct wpabuf * eap_noob_req_type_two(struct eap_sm *sm, struct eap_noob_peer_context * data, u8 id)
 {
     struct wpabuf *resp = NULL;
 
-    if (NULL == req_obj || NULL == data) {
+    if (!data) {
         wpa_printf(MSG_DEBUG, "EAP-NOOB: Input arguments NULL for function %s",__func__);
         return NULL;
     }
     wpa_printf(MSG_DEBUG, "Entering %s", __func__);
-    eap_noob_decode_obj(data->server_attr,req_obj);
-    if (data->server_attr->err_code != NO_ERROR) {
-        resp = eap_noob_err_msg(data, id); return resp;
-    }
 
     if (data->server_attr->rcvd_params != TYPE_TWO_PARAMS) {
         data->server_attr->err_code = E1002;
@@ -1962,29 +2372,21 @@ static struct wpabuf * eap_noob_req_type_two(struct eap_sm *sm, json_t * req_obj
 /**
  * eap_noob_req_type_one :  Decodes request type one
  * @eap_sm : eap statemachine context
- * @req_obj : received request message object
  * @data : peer context
  * @id   : response message id
  * Returns : pointer to message buffer or null
 **/
-static struct wpabuf * eap_noob_req_type_one(struct eap_sm * sm, json_t * req_obj , struct eap_noob_peer_context * data, u8 id)
+static struct wpabuf * eap_noob_req_type_one(struct eap_sm * sm, struct eap_noob_peer_context * data, u8 id)
 {
     struct wpabuf * resp = NULL;
     char * url = NULL;
     char url_cpy[2 * MAX_URL_LEN] = {0};
-    int err = 0;
-    json_t * macinput = NULL, * Vers = NULL, * Cryptosuites = NULL, * emptystr = json_string("");
-    json_error_t error;
 
-    if (NULL == req_obj || NULL == data) {
+    if (!data) {
         wpa_printf(MSG_DEBUG, "EAP-NOOB: Input arguments NULL for function %s",__func__);
         return NULL;
     }
     wpa_printf(MSG_DEBUG, "EAP-NOOB: Entering %s", __func__);
-    eap_noob_decode_obj(data->server_attr,req_obj);
-    if (data->server_attr->err_code != NO_ERROR) {
-        resp = eap_noob_err_msg(data,id); return resp;
-    }
 
     if (data->server_attr->rcvd_params != TYPE_ONE_PARAMS) {
         data->server_attr->err_code = E1002;
@@ -2018,52 +2420,20 @@ static struct wpabuf * eap_noob_req_type_one(struct eap_sm * sm, json_t * req_ob
         resp = eap_noob_rsp_type_one(sm,data, id);
     } else resp = eap_noob_err_msg(data,id);
 
-    /* Create MAC imput template */
-    /* 1/2,Vers,Verp,PeerId,Cryptosuites,Dirs,ServerInfo,Cryptosuitep,Dirp,[Realm],PeerInfo,PKs,Ns,PKp,Np,Noob */
-    err -= (NULL == (Vers = json_array()));
-    for (int i = 0; i < MAX_SUP_VER; ++i)
-        err += json_array_append_new(Vers, json_integer(data->server_attr->version[i]));
-    err -= (NULL == (Cryptosuites = json_array()));
-    for (int i = 0; i < MAX_SUP_CSUITES ; i++)
-        err += json_array_append_new(Cryptosuites, json_integer(data->server_attr->cryptosuite[i]));
-    
-    err -= (NULL == (macinput = json_array()));
-    err += json_array_append(macinput, emptystr);
-    err += json_array_append(macinput, Vers);
-    err += json_array_append_new(macinput, json_integer(data->peer_attr->version));
-    err += json_array_append_new(macinput, json_string(data->server_attr->PeerId));
-    err += json_array_append(macinput, Cryptosuites);
-    err += json_array_append_new(macinput, json_integer(data->server_attr->dir));
-    err += json_array_append_new(macinput, json_loads(data->server_attr->server_info, JSON_COMPACT|JSON_PRESERVE_ORDER, &error));
-    err += json_array_append_new(macinput, json_integer(data->peer_attr->cryptosuite));
-    err += json_array_append_new(macinput, json_integer(data->peer_attr->dir));
-//  If no realm is assinged, use empty string for mac calculation
-    if (os_strlen(data->server_attr->Realm)>0)
-        err += json_array_append_new(macinput, json_string(data->server_attr->Realm));
-    else
-        err += json_array_append_new(macinput, emptystr);
-    err += json_array_append(macinput, emptystr);
-    err += json_array_append(macinput, emptystr);
-    err += json_array_append(macinput, emptystr);
-    err += json_array_append(macinput, emptystr);
-    err += json_array_append(macinput, emptystr);
-    data->server_attr->mac_input = macinput;
-    if (err < 0) wpa_printf(MSG_ERROR, "EAP-NOOB: Unexpected JSON processing error when creating mac input template.");
     data->server_attr->rcvd_params = 0;
-    json_decref(Vers); json_decref(Cryptosuites); json_decref(emptystr);
     return resp;
 }
 
-
-static struct wpabuf * eap_noob_req_type_eight(struct eap_sm *sm,json_t * req_obj , struct eap_noob_peer_context * data, u8 id)
+/**
+ * eap_noob_req_type_eight :  Decodes request type eight
+ * @eap_sm : eap statemachine context
+ * @data : peer context
+ * @id   : response message id
+ * Returns : pointer to message buffer or null
+**/
+static struct wpabuf * eap_noob_req_type_eight(struct eap_sm *sm, struct eap_noob_peer_context * data, u8 id)
 {
     struct wpabuf *resp = NULL;
-
-    eap_noob_decode_obj(data->server_attr,req_obj);
-    if (data->server_attr->err_code != NO_ERROR) {
-        resp = eap_noob_err_msg(data,id);
-        return resp;
-    }
 
     if (data->server_attr->rcvd_params != TYPE_HINT_PARAMS) {
         data->server_attr->err_code = E1002;
@@ -2077,27 +2447,33 @@ static struct wpabuf * eap_noob_req_type_eight(struct eap_sm *sm,json_t * req_ob
     return resp;
 }
 
-static struct wpabuf * eap_noob_req_type_nine(struct eap_sm * sm, json_t * req_obj, struct eap_noob_peer_context * data, u8 id)
+/**
+ * eap_noob_req_type_nine :  Decodes request type nine
+ * @eap_sm : eap statemachine context
+ * @data : peer context
+ * @id   : response message id
+ * Returns : pointer to message buffer or null
+**/
+static struct wpabuf * eap_noob_req_type_nine(struct eap_sm * sm, struct eap_noob_peer_context * data, u8 id)
 {
     struct wpabuf *resp = NULL;
 
     // Message of type 9 from server does not contain any information,
     // thus the request object does not need to be parsed.
-    
+
     resp = eap_noob_rsp_type_nine(data, id);
-    
+
     return resp;
 }
 
 /**
  * eap_noob_req_err_handling :  handle received error message
  * @eap_sm : eap statemachine context
- * @req_obj : received request message object
  * @data : peer context
  * @id   : response message id
  * Returns : pointer to message buffer or null
 **/
-static void eap_noob_req_err_handling(struct eap_sm *sm,json_t * req_obj , struct eap_noob_peer_context * data, u8 id)
+static void eap_noob_req_err_handling(struct eap_sm *sm, struct eap_noob_peer_context * data, u8 id)
 {
     if (!data->server_attr->err_code) {
         eap_noob_db_update(data, UPDATE_STATE_ERROR);
@@ -2119,9 +2495,8 @@ static struct wpabuf * eap_noob_process(struct eap_sm * sm, void * priv, struct 
     struct wpabuf * resp = NULL;
     const u8 * pos;
     size_t len;
-    json_t * req_obj = NULL;
-    json_t * req_type = NULL;
-    json_error_t error;
+    struct json_token * req_obj = NULL;
+    struct json_token * req_type = NULL;
     int msgtype;
     u8 id =0;
 
@@ -2133,29 +2508,29 @@ static struct wpabuf * eap_noob_process(struct eap_sm * sm, void * priv, struct 
         return NULL;
     }
  /**
- * https://tools.ietf.org/html/rfc4137 Not dropping packets if header is valid. 
- * Consider using this for Error messages received when not expected. 
-**/   
+ * https://tools.ietf.org/html/rfc4137 Not dropping packets if header is valid.
+ * Consider using this for Error messages received when not expected.
+**/
     ret->ignore = FALSE;
 
     ret->methodState = METHOD_CONT;
     ret->decision = DECISION_FAIL;
 
   /**
- * https://tools.ietf.org/html/rfc3748 EAP-NOOB does not use 
- * or handle EAP Notificiation type messages.  
-**/      
+ * https://tools.ietf.org/html/rfc3748 EAP-NOOB does not use
+ * or handle EAP Notificiation type messages.
+**/
     ret->allowNotifications = FALSE;
 
     wpa_printf(MSG_DEBUG, "EAP-NOOB: Received Request = %s", pos);
-    req_obj = json_loads((char *)pos, JSON_COMPACT, &error);
+    req_obj = json_parse((char *) pos, os_strlen((char *) pos));
     id = eap_get_id(reqData);
 
-    if ((NULL != req_obj) && (json_is_object(req_obj) > 0)) {
-        req_type = json_object_get(req_obj,TYPE);
+    if (req_obj) {
+        req_type = json_get_member(req_obj, TYPE);
 
-        if ((NULL != req_type) && (json_is_integer(req_type) > 0)) {
-            msgtype = json_integer_value(req_type);
+        if (req_type) {
+            msgtype = req_type->number;
         } else {
             wpa_printf(MSG_DEBUG, "EAP-NOOB: Request with unknown type received");
             data->server_attr->err_code = E1003;
@@ -2169,7 +2544,7 @@ static struct wpabuf * eap_noob_process(struct eap_sm * sm, void * priv, struct 
         goto EXIT;
     }
 
-    wpa_printf(MSG_DEBUG, "EAP-NOOB: State :%d, message type = %d",data->server_attr->state, msgtype);
+    wpa_printf(MSG_DEBUG, "EAP-NOOB: state = %d, message type = %d",data->server_attr->state, msgtype);
     if (VALID != state_message_check[data->server_attr->state][msgtype]) {
         data->server_attr->err_code = E2002;
         resp = eap_noob_err_msg(data, id);
@@ -2182,45 +2557,53 @@ static struct wpabuf * eap_noob_process(struct eap_sm * sm, void * priv, struct 
         wpa_printf(MSG_DEBUG, "EAP-NOOB: Deleted SSID");
     }
 
+    // Decode the JSON object and store it locally
+    // This way, all methods will be able to access it.
+    eap_noob_decode_obj(data->server_attr, req_obj);
+    if (data->server_attr->err_code != NO_ERROR) {
+        resp = eap_noob_err_msg(data,id);
+        goto EXIT;
+    }
+
     switch(msgtype) {
         case NONE:
             wpa_printf(MSG_DEBUG, "EAP-NOOB: Error message received");
-            eap_noob_req_err_handling(sm,req_obj,data, id);
+            eap_noob_req_err_handling(sm, data, id);
             break;
         case EAP_NOOB_TYPE_1:
-            resp = eap_noob_req_type_one(sm,req_obj ,data,id);
+            resp = eap_noob_req_type_one(sm, data, id);
             break;
         case EAP_NOOB_TYPE_2:
-            resp = eap_noob_req_type_two(sm,req_obj ,data, id);
+            resp = eap_noob_req_type_two(sm, data, id);
             break;
         case EAP_NOOB_TYPE_3:
-            resp = eap_noob_req_type_three(sm,req_obj ,data, id);
+            resp = eap_noob_req_type_three(sm, data, id);
             break;
         case EAP_NOOB_TYPE_4:
-            resp = eap_noob_req_type_four(sm,req_obj ,data, id);
+            resp = eap_noob_req_type_four(sm, data, id);
             if(data->server_attr->err_code == NO_ERROR) {
                 ret->methodState = METHOD_MAY_CONT;
                 ret->decision = DECISION_COND_SUCC;
             }
             break;
         case EAP_NOOB_TYPE_5:
-            resp = eap_noob_req_type_five(sm, req_obj, data, id);
+            resp = eap_noob_req_type_five(sm, data, id);
             break;
         case EAP_NOOB_TYPE_6:
-            resp = eap_noob_req_type_six(sm, req_obj, data, id);
+            resp = eap_noob_req_type_six(sm, data, id);
             break;
         case EAP_NOOB_TYPE_7:
-            resp = eap_noob_req_type_seven(sm, req_obj, data, id);
+            resp = eap_noob_req_type_seven(sm, data, id);
             if(data->server_attr->err_code == NO_ERROR) {
                 ret->methodState = METHOD_MAY_CONT;
                 ret->decision = DECISION_COND_SUCC;
             }
             break;
         case EAP_NOOB_HINT:
-            resp = eap_noob_req_type_eight(sm, req_obj, data, id);
+            resp = eap_noob_req_type_eight(sm, data, id);
             break;
         case EAP_NOOB_TYPE_9:
-            resp = eap_noob_req_type_nine(sm, req_obj, data, id);
+            resp = eap_noob_req_type_nine(sm, data, id);
             break;
         default:
             wpa_printf(MSG_DEBUG, "EAP-NOOB: Unknown EAP-NOOB request received");
@@ -2228,10 +2611,12 @@ static struct wpabuf * eap_noob_process(struct eap_sm * sm, void * priv, struct 
     }
 EXIT:
     data->server_attr->err_code = NO_ERROR;
+    /*
     if (req_type)
-        json_decref(req_type);
+        json_free(req_type);
     else if (req_obj)
-        json_decref(req_obj);
+        json_free(req_obj);
+     */
     return resp;
 }
 
@@ -2257,7 +2642,6 @@ static void eap_noob_free_ctx(struct eap_noob_peer_context * data)
         EAP_NOOB_FREE(serv->ssid);
         EAP_NOOB_FREE(serv->PeerId);
         EAP_NOOB_FREE(serv->Realm);
-        json_decref(serv->mac_input);
         EAP_NOOB_FREE(serv->mac_input_str);
 
         if (serv->ecdh_exchange_data) {
@@ -2266,8 +2650,8 @@ static void eap_noob_free_ctx(struct eap_noob_peer_context * data)
             EAP_NOOB_FREE(serv->ecdh_exchange_data->y_serv_b64);
             EAP_NOOB_FREE(serv->ecdh_exchange_data->x_b64);
             EAP_NOOB_FREE(serv->ecdh_exchange_data->y_b64);
-            json_decref(serv->ecdh_exchange_data->jwk_serv);
-            json_decref(serv->ecdh_exchange_data->jwk_peer);
+            EAP_NOOB_FREE(serv->ecdh_exchange_data->jwk_serv);
+            EAP_NOOB_FREE(serv->ecdh_exchange_data->jwk_peer);
             EAP_NOOB_FREE(serv->ecdh_exchange_data->shared_key);
             EAP_NOOB_FREE(serv->ecdh_exchange_data->shared_key_b64);
             os_free(serv->ecdh_exchange_data);
@@ -2287,7 +2671,7 @@ static void eap_noob_free_ctx(struct eap_noob_peer_context * data)
             EAP_NOOB_FREE(serv->kdf_out->msk);
             EAP_NOOB_FREE(serv->kdf_out->emsk);
             EAP_NOOB_FREE(serv->kdf_out->amsk);
-            EAP_NOOB_FREE(serv->kdf_out->MethodId);            
+            EAP_NOOB_FREE(serv->kdf_out->MethodId);
             EAP_NOOB_FREE(serv->kdf_out->Kms);
             EAP_NOOB_FREE(serv->kdf_out->Kmp);
             EAP_NOOB_FREE(serv->kdf_out->Kz);
@@ -2299,7 +2683,7 @@ static void eap_noob_free_ctx(struct eap_noob_peer_context * data)
     if (peer) {
         wpa_printf(MSG_DEBUG, "EAP_NOOB: Clearing peer data");
         EAP_NOOB_FREE(peer->PeerId);
-        json_decref(peer->PeerInfo);
+        EAP_NOOB_FREE(peer->PeerInfo);
         EAP_NOOB_FREE(peer->MAC);
         EAP_NOOB_FREE(peer->Realm);
         if (peer->peer_config_params) {
@@ -2369,7 +2753,7 @@ static int eap_noob_create_db(struct eap_sm *sm, struct eap_noob_peer_context * 
             if (ret == FAILURE || ret == EMPTY ) {
                 wpa_printf(MSG_DEBUG, "EAP-NOOB: SSID not present in any tables");
                 return SUCCESS;
-            }  else { data->server_attr->state = REGISTERED_STATE; } 
+            }  else { data->server_attr->state = REGISTERED_STATE; }
         } else {
             if (FAILURE != eap_noob_exec_query(data, QUERY_EPHEMERALNOOB, columns_ephemeralnoob, 2,
                            TEXT, wpa_s->current_ssid->ssid)) {
@@ -2513,7 +2897,7 @@ static int eap_noob_handle_incomplete_conf(struct eap_noob_peer_context * data)
 static int eap_noob_read_config(struct eap_sm *sm,struct eap_noob_peer_context * data)
 {
     FILE * conf_file = NULL;
-    char * buff = NULL, * PeerInfo_str = NULL;
+    char * buff = NULL;
 
     if (NULL == (conf_file = fopen(CONF_FILE,"r"))) {
         wpa_printf(MSG_ERROR, "EAP-NOOB: Configuration file not found");
@@ -2548,15 +2932,13 @@ static int eap_noob_read_config(struct eap_sm *sm,struct eap_noob_peer_context *
     if (data->peer_attr->config_params != CONF_PARAMS && FAILURE == eap_noob_handle_incomplete_conf(data))
         return FAILURE;
 
-    if (NULL != (data->peer_attr->PeerInfo = eap_noob_prepare_peer_info_json(sm, data->peer_attr->peer_config_params))) {
-            PeerInfo_str =  json_dumps(data->peer_attr->PeerInfo, JSON_COMPACT|JSON_PRESERVE_ORDER);
-            if (NULL == PeerInfo_str || os_strlen(PeerInfo_str) > MAX_INFO_LEN) {
+    if (NULL != (data->peer_attr->PeerInfo = eap_noob_prepare_peer_info_string(sm, data->peer_attr->peer_config_params))) {
+            if (!data->peer_attr->PeerInfo || os_strlen(data->peer_attr->PeerInfo) > MAX_INFO_LEN) {
                 wpa_printf(MSG_ERROR, "EAP-NOOB: Incorrect or no peer info");
                 return FAILURE;
             }
     }
-    wpa_printf(MSG_DEBUG, "EAP-NOOB: PEER INFO = %s", PeerInfo_str);
-    os_free(PeerInfo_str);
+    wpa_printf(MSG_DEBUG, "EAP-NOOB: PEER INFO = %s", data->peer_attr->PeerInfo);
     return SUCCESS;
 }
 

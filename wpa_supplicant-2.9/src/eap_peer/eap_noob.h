@@ -28,6 +28,7 @@
 #define MAX_PEER_ID_LEN         22
 #define MAX_CONF_LEN            500
 #define MAX_INFO_LEN            500
+#define MAX_MAC_INPUT_LEN       1500
 
 #define KDF_LEN                 320
 #define MSK_LEN                 64
@@ -78,6 +79,7 @@
 #define SERVERINFO              "ServerInfo"
 #define MACS                    "MACs"
 #define MACS2                   "MACs2"
+#define KEYINGMODE              "KeyingMode"
 
 #define HINT_PEER               "NoobId"
 #define HINT_SERV               "NoobId"
@@ -240,7 +242,7 @@ struct eap_noob_ecdh_kdf_out {
     u8 * msk;
     u8 * emsk;
     u8 * amsk;
-    u8 * MethodId;    
+    u8 * MethodId;
     u8 * Kms;
     u8 * Kmp;
     u8 * Kz;
@@ -272,8 +274,8 @@ struct eap_noob_ecdh_key_exchange {
     char * y_b64;
     size_t y_len;
 
-    json_t * jwk_serv;
-    json_t * jwk_peer;
+    char * jwk_serv;
+    char * jwk_peer;
 
     u8 * shared_key;
     char * shared_key_b64;
@@ -287,6 +289,7 @@ struct eap_noob_server_data {
     u32 cryptosuite[MAX_SUP_CSUITES];
     u32 dir;
     u32 minsleep;
+    u32 keying_mode;
     u32 rcvd_params;
 
     char * server_info;
@@ -295,7 +298,6 @@ struct eap_noob_server_data {
     char * PeerId;
     char * Realm;
 
-    json_t * mac_input;
     char * mac_input_str;
 
     enum eap_noob_err_code err_code;
@@ -323,7 +325,7 @@ struct eap_noob_peer_data {
     u32 config_params;
 
     char * PeerId;
-    json_t * PeerInfo;
+    char * PeerInfo;
     char * MAC;
     char * Realm;
 
