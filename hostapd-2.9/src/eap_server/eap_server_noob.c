@@ -1790,6 +1790,7 @@ static int eap_noob_build_JWK(char ** jwk, const char * x_b64)
     json_add_string(json, CURVE, "P-256");
     json_value_sep(json);
     json_add_string(json, X_COORDINATE, x_b64);
+    json_end_object(json);
 
     *jwk = strndup(wpabuf_head(json), wpabuf_len(json));
     if (!*jwk) {
@@ -1874,7 +1875,7 @@ static struct wpabuf * eap_noob_req_type_two(struct eap_noob_server_context *dat
     json_value_sep(json);
     json_add_string(json, PEERID, data->peer_attr->PeerId);
     json_value_sep(json);
-    json_add_string(json, PKS, data->peer_attr->ecdh_exchange_data->jwk_serv);
+    wpabuf_printf(json, "\"%s\":%s", PKS, data->peer_attr->ecdh_exchange_data->jwk_serv);
     json_value_sep(json);
     json_add_string(json, NS, Ns_b64);
     json_value_sep(json);
@@ -2416,6 +2417,10 @@ static void  eap_noob_decode_obj(struct eap_noob_peer_data * data, struct json_t
                         goto EXIT;
                     }
 
+                    // Also decode the contents of the public key object
+                    // for later use.
+                    eap_noob_decode_obj(data, child);
+
                     data->rcvd_params |= PKEY_RCVD;
                 }
                 // PeerInfo
@@ -2837,6 +2842,7 @@ EXIT:
     if (result == FAILURE) {
         wpa_printf(MSG_ERROR, "EAP-NOOB: Error while handling response message type 9");
     }
+    data->peer_attr->rcvd_params = 0;
 }
 
 /**

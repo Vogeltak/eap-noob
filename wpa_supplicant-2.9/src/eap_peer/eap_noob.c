@@ -416,6 +416,7 @@ static int eap_noob_encode_vers_cryptosuites(struct eap_noob_peer_context * data
     for (int i = 0; i < MAX_SUP_CSUITES; i++) {
         wpabuf_printf(cryptosuites, "%s%u", i ? "," : "", data->server_attr->cryptosuite[i]);
     }
+    json_end_array(cryptosuites);
 
     // Duplicate strings to output pointers
     *Vers = strndup(wpabuf_head(vers), wpabuf_len(vers));
@@ -976,6 +977,10 @@ static void eap_noob_decode_obj(struct eap_noob_server_data * data, struct json_
                         goto EXIT;
                     }
 
+                    // Also decode the contents of the public key
+                    // to be stored for later use.
+                    eap_noob_decode_obj(data, child);
+
                     data->rcvd_params |= PKEY_RCVD;
                 }
                 // ServerInfo
@@ -1402,7 +1407,7 @@ static int eap_noob_db_update_initial_exchange_info(struct eap_sm * sm, struct e
             TEXT,  Vers, TEXT, Cryptosuites, TEXT, data->server_attr->Realm, INT, data->server_attr->dir,
             TEXT, data->server_attr->server_info, BLOB, NONCE_LEN, data->server_attr->kdf_nonce_data->Ns, BLOB,
             NONCE_LEN, data->server_attr->kdf_nonce_data->Np, BLOB, ECDH_SHARED_SECRET_LEN,
-            data->server_attr->ecdh_exchange_data->shared_key, TEXT, data->server_attr->mac_input_str, INT,
+            data->server_attr->ecdh_exchange_data->shared_key, TEXT, "", INT,
             data->server_attr->state);
 
     if (FAILURE == ret) {
@@ -1658,6 +1663,7 @@ static int eap_noob_build_JWK(char ** jwk, const char * x_b64)
     json_add_string(json, CURVE, "Curve25519");
     json_value_sep(json);
     json_add_string(json, X_COORDINATE, x_b64);
+    json_end_object(json);
 
     *jwk = strndup(wpabuf_head(json), wpabuf_len(json));
     if (!*jwk) {
@@ -1744,7 +1750,7 @@ static struct wpabuf * eap_noob_rsp_type_two(struct eap_noob_peer_context * data
     json_value_sep(json);
     json_add_string(json, PEERID, data->peer_attr->PeerId);
     json_value_sep(json);
-    json_add_string(json, PKP, data->server_attr->ecdh_exchange_data->jwk_peer);
+    wpabuf_printf(json, "\"%s\":%s", PKP, data->server_attr->ecdh_exchange_data->jwk_peer);
     json_value_sep(json);
     json_add_string(json, NP, Np_b64);
     json_end_object(json);
