@@ -371,7 +371,7 @@ static int eap_noob_db_functions(struct eap_noob_server_context * data, u8 type)
                   INT, data->peer_attr->cryptosuite, TEXT, server_conf.realm, INT, data->peer_attr->dir, TEXT,
                   data->peer_attr->peerinfo, BLOB, NONCE_LEN, data->peer_attr->kdf_nonce_data->Ns, BLOB, NONCE_LEN,
                   data->peer_attr->kdf_nonce_data->Np, BLOB, ECDH_SHARED_SECRET_LEN, data->peer_attr->ecdh_exchange_data->shared_key,
-                  TEXT, data->peer_attr->mac_input_str, INT, data->peer_attr->sleep_count, INT, data->peer_attr->server_state);
+                  TEXT, "", INT, data->peer_attr->sleep_count, INT, data->peer_attr->server_state);
             os_free(dump_str);
             break;
         case GET_NOOBID:
@@ -2748,8 +2748,15 @@ static void eap_noob_rsp_type_two(struct eap_noob_server_context * data)
         wpa_printf(MSG_DEBUG, "EAP-NOOB: Shared secret %s", data->peer_attr->ecdh_exchange_data->shared_key_b64);
         eap_noob_change_state(data, WAITING_FOR_OOB_STATE);
 
+        if (FAILURE == eap_noob_db_functions(data, UPDATE_INITIALEXCHANGE_INFO)) {
+            eap_noob_set_done(data, DONE);
+            eap_noob_set_success(data,FAILURE);
+            return;
+        }
+
         data->peer_attr->next_req = NONE;
-        eap_noob_set_done(data, DONE); eap_noob_set_success(data, FAILURE);
+        eap_noob_set_done(data, DONE);
+        eap_noob_set_success(data, FAILURE);
     }
 }
 
