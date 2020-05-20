@@ -1323,14 +1323,14 @@ static u8 * eap_noob_gen_MAC(const struct eap_noob_server_context * data, int ty
     }
 
     // Direction supported by the server
-    if (type == RECONNECT_EXCHANGE) {
+    if (state == RECONNECT_EXCHANGE) {
         wpabuf_printf(mac_json, ",\"\"");
     } else {
         wpabuf_printf(mac_json, ",%u", data->server_attr->dir);
     }
 
     // Server info object
-    if (type == RECONNECT_EXCHANGE) {
+    if (state == RECONNECT_EXCHANGE) {
         wpabuf_printf(mac_json, ",\"\"");
     } else {
         wpabuf_printf(mac_json, ",%s", data->server_attr->server_info);
@@ -1340,7 +1340,7 @@ static u8 * eap_noob_gen_MAC(const struct eap_noob_server_context * data, int ty
     wpabuf_printf(mac_json, ",%u", data->peer_attr->cryptosuite);
 
     // Direction supported by the peer
-    if (type == RECONNECT_EXCHANGE) {
+    if (state == RECONNECT_EXCHANGE) {
         wpabuf_printf(mac_json, ",\"\"");
     } else {
         wpabuf_printf(mac_json, ",%u", data->peer_attr->dir);
@@ -1355,21 +1355,21 @@ static u8 * eap_noob_gen_MAC(const struct eap_noob_server_context * data, int ty
     }
 
     // Peer info object
-    if (type == RECONNECT_EXCHANGE) {
+    if (state == RECONNECT_EXCHANGE) {
         wpabuf_printf(mac_json, ",\"\"");
     } else {
         wpabuf_printf(mac_json, ",%s", data->peer_attr->peerinfo);
     }
 
     // KeyingMode
-    if (type == RECONNECT_EXCHANGE) {
+    if (state == RECONNECT_EXCHANGE) {
         wpabuf_printf(mac_json, ",%u", data->server_attr->keying_mode);
     } else {
         wpabuf_printf(mac_json, ",0");
     }
 
     // Public key server
-    if (type == RECONNECT_EXCHANGE) {
+    if (state == RECONNECT_EXCHANGE) {
         wpabuf_printf(mac_json, ",\"\"");
     } else {
         wpabuf_printf(mac_json, ",%s", data->peer_attr->ecdh_exchange_data->jwk_serv);
@@ -1380,7 +1380,7 @@ static u8 * eap_noob_gen_MAC(const struct eap_noob_server_context * data, int ty
     wpabuf_printf(mac_json, ",\"%s\"", nonce);
 
     // Public key peer
-    if (type == RECONNECT_EXCHANGE) {
+    if (state == RECONNECT_EXCHANGE) {
         wpabuf_printf(mac_json, ",\"\"");
     } else {
         wpabuf_printf(mac_json, ",%s", data->peer_attr->ecdh_exchange_data->jwk_peer);
@@ -1391,7 +1391,7 @@ static u8 * eap_noob_gen_MAC(const struct eap_noob_server_context * data, int ty
     wpabuf_printf(mac_json, ",\"%s\"", nonce);
 
     // Nonce out of band
-    if (type == RECONNECT_EXCHANGE) {
+    if (state == RECONNECT_EXCHANGE) {
         wpabuf_printf(mac_json, ",\"\"");
     } else {
         wpabuf_printf(mac_json, ",\"%s\"", data->peer_attr->oob_data->Noob_b64);
