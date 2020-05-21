@@ -17,6 +17,8 @@
 #define ECDH_SHARED_SECRET_LEN  32
 #define ALGORITHM_ID            "EAP-NOOB"
 #define ALGORITHM_ID_LEN        8
+#define MACS_TYPE               2
+#define MACP_TYPE               1
 
 /* MAX values for fields */
 #define MAX_SUP_VER             3
@@ -211,8 +213,6 @@ enum {UPDATE_PERSISTENT_STATE, UPDATE_STATE_MINSLP, UPDATE_PERSISTENT_KEYS_SECRE
 
 enum eap_noob_err_code {NO_ERROR, E1001, E1002, E1003, E1004, E1007, E2001, E2002,
                         E2003, E2004, E3001, E3002, E3003, E4001, E5001, E5002, E5003, E5004};
-
-enum {HOOB_TYPE, MACS_TYPE, MACP_TYPE};
 
 enum sql_datatypes {TEXT, INT, UNSIGNED_BIG_INT, BLOB,};
 

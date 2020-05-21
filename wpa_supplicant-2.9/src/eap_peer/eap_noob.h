@@ -21,6 +21,8 @@
 #define ALGORITHM_ID                "EAP-NOOB"
 #define ALGORITHM_ID_LEN            8
 #define FORMAT_BASE64URL            1
+#define MACS_TYPE                   2
+#define MACP_TYPE                   1
 
 /* MAX values for the fields */
 #define MAX_SUP_VER             1
@@ -213,8 +215,6 @@ enum {NONE, EAP_NOOB_TYPE_1, EAP_NOOB_TYPE_2, EAP_NOOB_TYPE_3, EAP_NOOB_TYPE_4, 
 
 enum eap_noob_err_code {NO_ERROR, E1001, E1002, E1003, E1004, E1007, E2001, E2002,
                         E2003, E2004, E3001, E3002, E3003, E4001, E5001, E5002, E5003, E5004};
-
-enum {MACS_TYPE, MACP_TYPE};
 
 enum {UPDATE_PERSISTENT_STATE, UPDATE_STATE_ERROR, DELETE_SSID};
 

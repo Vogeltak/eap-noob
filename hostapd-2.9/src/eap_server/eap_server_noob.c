@@ -1269,20 +1269,16 @@ EXIT:
 }
 
 /**
- * eap_noob_gen_MAC : generate an HMAC for user authentication.
- * @data : server context
- * type  : MAC type
- * @key  : key to generate MAC
- * @keylen: key length
- * Returns : MAC on success or NULL on error.
- **/
-static u8 * eap_noob_gen_MAC(const struct eap_noob_server_context * data, int type, u8 * key, int keylen, int state)
+ * Construct a JSON array string of all input data for a MAC.
+ * @data: server context that contains all required data
+ * @first_param: either the type of MAC or the Direction, necessary for MAC or Hoob respectively
+ * @state: the current state
+ */
+static char * eap_noob_build_mac_input(const struct eap_noob_server_context * data,
+                                       int first_param, int state)
 {
-    u8 * mac = NULL;
     struct wpabuf * mac_json;
     char * nonce;
-
-    // TODO: Verify that all required information exists
 
     // Allocate memory to the JSON string to be built
     mac_json = wpabuf_alloc(MAX_MAC_INPUT_LEN);
@@ -1291,15 +1287,15 @@ static u8 * eap_noob_gen_MAC(const struct eap_noob_server_context * data, int ty
         return NULL;
     }
 
-    // Build the MAC input string from all components as specified in draft 8
+    // Integer that either indicates the MAC type (MACs = 2, MACp = 1)
+    // or the direction of OOB data (peer-to-server = 1, server-to-peer = 2)
+    // See section 3.3.2. Message data fields of the latest draft:
     // https://tools.ietf.org/html/draft-ietf-emu-eap-noob-00
-    json_start_array(mac_json, NULL);
-
-    // Integer to indicate whether this MAC is from the server or the peer
-    if (type == MACS_TYPE) {
-        wpabuf_printf(mac_json, "%u", 2);
+    if (first_param == 1 || first_param == 2) {
+        wpabuf_printf(mac_json, "%u", first_param);
     } else {
-        wpabuf_printf(mac_json, "%u", 1);
+        wpa_printf(MSG_DEBUG, "EAP-NOOB: MAC type or Direction was not 1 or 2 in %s", __func__);
+        return NULL;
     }
 
     // Versions supported by server
@@ -1308,6 +1304,7 @@ static u8 * eap_noob_gen_MAC(const struct eap_noob_server_context * data, int ty
     for (int i = 0; i < MAX_SUP_VER; i++) {
         wpabuf_printf(mac_json, "%s%u", i ? "," : "", data->server_attr->version[i]);
     }
+    json_end_array(mac_json);
 
     // Version chosen by peer
     wpabuf_printf(mac_json, ",%u", data->peer_attr->version);
@@ -1321,6 +1318,7 @@ static u8 * eap_noob_gen_MAC(const struct eap_noob_server_context * data, int ty
     for (int i = 0; i < MAX_SUP_CSUITES; i++) {
         wpabuf_printf(mac_json, "%s%u", i ? "," : "", data->server_attr->cryptosuite[i]);
     }
+    json_end_array(mac_json);
 
     // Direction supported by the server
     if (state == RECONNECT_EXCHANGE) {
@@ -1391,7 +1389,7 @@ static u8 * eap_noob_gen_MAC(const struct eap_noob_server_context * data, int ty
     wpabuf_printf(mac_json, ",\"%s\"", nonce);
 
     // Nonce out of band
-    if (state == RECONNECT_EXCHANGE) {
+    if (state == RECONNECT_EXCHANGE || !data->peer_attr->oob_data->Noob_b64) {
         wpabuf_printf(mac_json, ",\"\"");
     } else {
         wpabuf_printf(mac_json, ",\"%s\"", data->peer_attr->oob_data->Noob_b64);
@@ -1400,13 +1398,35 @@ static u8 * eap_noob_gen_MAC(const struct eap_noob_server_context * data, int ty
     json_end_array(mac_json);
 
     // Dump to string
-    data->peer_attr->mac_input_str = strndup(wpabuf_head(mac_json), wpabuf_len(mac_json));
-    if (!data->peer_attr->mac_input_str) {
+    char * res = strndup(wpabuf_head(mac_json), wpabuf_len(mac_json));
+    if (!res) {
         wpa_printf(MSG_ERROR, "EAP-NOOB: Failed to copy MAC input string");
         return NULL;
     }
 
     wpabuf_free(mac_json);
+    os_free(nonce);
+
+    return res;
+}
+
+/**
+ * eap_noob_gen_MAC : generate an HMAC for user authentication.
+ * @data : server context
+ * type  : MAC type
+ * @key  : key to generate MAC
+ * @keylen: key length
+ * Returns : MAC on success or NULL on error.
+ **/
+static u8 * eap_noob_gen_MAC(const struct eap_noob_server_context * data, int type, u8 * key, int keylen, int state)
+{
+    u8 * mac = NULL;
+
+    // TODO: Verify that all required information exists
+
+
+    // Build the MAC input and store it
+    data->peer_attr->mac_input_str = eap_noob_build_mac_input(data, type, state);
 
     wpa_printf(MSG_DEBUG, "EAP-NOOB: In %s: MAC=%s, length=%d", __func__,
             data->peer_attr->mac_input_str,
@@ -2352,7 +2372,16 @@ static void json_token_to_string(struct wpabuf * json, struct json_token * token
                 ;
         }
 
-        sibling = sibling->sibling;
+        // When converting to string, do not include siblings of the root token.
+        // This function assumes that the root token is either an object or an
+        // array, and that the caller wishes to only dump *this* token to a string.
+        // Thus, if the type is something else, it means that we are *inside*
+        // the root, and therefore we want to loop over all children.
+        if (sibling->type != JSON_OBJECT && sibling->type != JSON_ARRAY) {
+            sibling = sibling->sibling;
+        } else {
+            sibling = NULL;
+        }
         element_nr++;
     }
 }
@@ -2411,8 +2440,18 @@ static void  eap_noob_decode_obj(struct eap_noob_peer_data * data, struct json_t
             case JSON_OBJECT:
                 // PKp or PKp2
                 if (!os_strcmp(key, PKP) || !os_strcmp(key, PKP2)) {
-                    data->ecdh_exchange_data->jwk_peer = json_dump(child);
-                    if (!data->ecdh_exchange_data->jwk_serv) {
+                    struct json_token * child_copy;
+                    memcpy(&child_copy, &child, sizeof(child));
+                    if (!child_copy) {
+                        wpa_printf(MSG_DEBUG, "EAP-NOOB: Error while copying json_token");
+                        goto EXIT;
+                    }
+
+                    // Exclude name of the new root object from the JSON dump
+                    child_copy->name = NULL;
+
+                    data->ecdh_exchange_data->jwk_peer = json_dump(child_copy);
+                    if (!data->ecdh_exchange_data->jwk_peer) {
                         data->err_code = E1003;
                         goto EXIT;
                     }
@@ -2747,6 +2786,10 @@ static void eap_noob_rsp_type_two(struct eap_noob_server_context * data)
           ECDH_SHARED_SECRET_LEN, &data->peer_attr->ecdh_exchange_data->shared_key_b64);
         wpa_printf(MSG_DEBUG, "EAP-NOOB: Shared secret %s", data->peer_attr->ecdh_exchange_data->shared_key_b64);
         eap_noob_change_state(data, WAITING_FOR_OOB_STATE);
+
+        // Generate the MAC input string such that it can be used for
+        // calculating the Hoob.
+        data->peer_attr->mac_input_str = eap_noob_build_mac_input(data, data->peer_attr->dir, data->peer_attr->server_state);
 
         if (FAILURE == eap_noob_db_functions(data, UPDATE_INITIALEXCHANGE_INFO)) {
             eap_noob_set_done(data, DONE);
