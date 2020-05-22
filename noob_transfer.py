@@ -4,6 +4,7 @@
 
 import base64
 from collections import OrderedDict
+from datetime import datetime
 import hashlib
 import json
 import os
@@ -24,9 +25,17 @@ def exec_query(query, db_path, args=[]):
     c = conn.cursor()
     c.execute(query, args)
     conn.commit()
+    # Should be changed if we want to handle all peers
     out = c.fetchone()
     conn.close()
     return out
+
+def get_peers():
+    """Retrieve PeerIds and SSIDs for peers that are ready for OOB transfer"""
+
+    query = 'SELECT Ssid, PeerId from EphemeralState WHERE PeerState=1'
+    data = exec_query(query, db_path_peer)
+    return data
 
 def gen_noob():
     """Generate a random 16 byte secret nonce"""
@@ -62,5 +71,27 @@ def compute_hoob(peer_id, noob, direction):
     hoob_b64 = base64.urlsafe_b64encode(hoob[0:16]).decode('ascii').strip('=')
     return hoob_b64
 
-hoob = compute_hoob('Yr8hohFMCqmJW8eYFAE2Jy', gen_noob(), 1)
-print(f'[Hoob] {hoob}')
+def transfer_oob(ssid, peer_id, direction):
+    """Simulates the transferral of the OOB data"""
+
+    noob = gen_noob()
+    noob_id = compute_noob_id(noob)
+    hoob = compute_hoob(peer_id, noob, direction)
+    sent_time = int(datetime.utcnow().timestamp())
+
+    # Insert the OOB data into the peer database
+    query = 'INSERT INTO EphemeralNoob (Ssid, PeerId, NoobId, Noob, Hoob, sent_time) VALUES (?, ?, ?, ?, ?, ?)'
+    args = [ssid, peer_id, noob_id, noob, hoob, sent_time]
+
+    exec_query(query, db_path_peer, args)
+
+    # Insert the OOB data into the server database
+    query = 'INSERT INTO EphemeralNoob (PeerId, NoobId, Noob, sent_time) VALUES (?, ?, ?, ?)'
+    args = [peer_id, noob_id, noob, sent_time]
+
+    exec_query(query, db_path_server, args)
+
+
+if __name__ == '__main__':
+    peer = get_peers()
+    transfer_oob(peer[0], peer[1], 1)
