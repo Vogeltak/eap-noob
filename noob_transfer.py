@@ -86,8 +86,8 @@ def transfer_oob(ssid, peer_id, direction):
     exec_query(query, db_path_peer, args)
 
     # Insert the OOB data into the server database
-    query = 'INSERT INTO EphemeralNoob (PeerId, NoobId, Noob, sent_time) VALUES (?, ?, ?, ?)'
-    args = [peer_id, noob_id, noob, sent_time]
+    query = 'INSERT INTO EphemeralNoob (PeerId, NoobId, Noob, Hoob, sent_time) VALUES (?, ?, ?, ?, ?)'
+    args = [peer_id, noob_id, noob, hoob, sent_time]
 
     exec_query(query, db_path_server, args)
 

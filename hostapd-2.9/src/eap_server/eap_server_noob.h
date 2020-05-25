@@ -161,6 +161,7 @@
     PeerId TEXT NOT NULL REFERENCES EphemeralState(PeerId), \
     NoobId TEXT NOT NULL,                           \
     Noob TEXT NOT NULL,                             \
+    Hoob TEXT NOT NULL,                             \
     sent_time BIGINT NOT NULL,                      \
     UNIQUE(Peerid,NoobId));"
 
@@ -242,7 +243,7 @@ struct eap_noob_ecdh_kdf_nonce {
 };
 
 struct eap_noob_oob_data {
-
+    char * Hoob_b64;
     char * Noob_b64;
     char * NoobId_b64;
     time_t sent_time;

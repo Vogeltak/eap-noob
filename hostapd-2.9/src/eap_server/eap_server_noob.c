@@ -232,7 +232,8 @@ static void columns_ephemeralnoob(struct eap_noob_server_context * data, sqlite3
 {
     data->peer_attr->oob_data->NoobId_b64 = os_strdup((char *)sqlite3_column_text(stmt, 1));
     data->peer_attr->oob_data->Noob_b64 = os_strdup((char *)sqlite3_column_text(stmt, 2));
-    data->peer_attr->oob_data->sent_time = (uint64_t) sqlite3_column_int64(stmt, 3);
+    data->peer_attr->oob_data->Hoob_b64 = os_strdup((char *) sqlite3_column_text(stmt, 3));
+    data->peer_attr->oob_data->sent_time = (uint64_t) sqlite3_column_int64(stmt, 4);
 }
 
 /**
@@ -2872,6 +2873,21 @@ static void eap_noob_rsp_type_nine(struct eap_noob_server_context * data)
         goto EXIT;
     }
 
+    // Check whether new OOB data has arrived
+    if (data->peer_attr->server_state == WAITING_FOR_OOB_STATE) {
+        if (FAILURE == eap_noob_exec_query(data, QUERY, columns_ephemeralnoob, 2, TEXT, data->peer_attr->peerid_rcvd)) {
+            wpa_printf(MSG_DEBUG, "EAP-NOOB: Error while retrieving OOB data from the database");
+            return FAILURE;
+        }
+
+        // Verify a locally generated Hoob against the one received out-of-band
+        char * input = eap_noob_build_mac_input(data, data->peer_attr->dir, data->peer_attr->server_state);
+        if (!input) {
+            wpa_printf(MSG_DEBUG, "EAP-NOOB: Failed to build Hoob input");
+            goto EXIT;
+        }
+    }
+
     // Determine the next request message that the server should send to the peer
     // after concluding the common handshake.
     if (data->peer_attr->err_code == NO_ERROR) {
@@ -3283,6 +3299,7 @@ static void eap_noob_free_ctx(struct eap_noob_server_context * data)
         if (peer->oob_data) {
             EAP_NOOB_FREE(peer->oob_data->Noob_b64);
             EAP_NOOB_FREE(peer->oob_data->NoobId_b64);
+            EAP_NOOB_FREE(peer->oob_data->Hoob_b64);
             os_free(peer->oob_data); peer->oob_data = NULL;
         }
         if (peer->kdf_out) {
