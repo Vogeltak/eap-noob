@@ -48,6 +48,7 @@
 #include "includes.h"
 #include "common.h"
 #include "json.h"
+#include "crypto/crypto.h"
 #include "eap_i.h"
 #include "eap_server_noob.h"
 
@@ -1288,6 +1289,10 @@ static char * eap_noob_build_mac_input(const struct eap_noob_server_context * da
         return NULL;
     }
 
+    // Build the MAC input string from all components as specified in draft 8
+    // https://tools.ietf.org/html/draft-ietf-emu-eap-noob-00
+    json_start_array(mac_json, NULL);
+
     // Integer that either indicates the MAC type (MACs = 2, MACp = 1)
     // or the direction of OOB data (peer-to-server = 1, server-to-peer = 2)
     // See section 3.3.2. Message data fields of the latest draft:
@@ -1303,7 +1308,8 @@ static char * eap_noob_build_mac_input(const struct eap_noob_server_context * da
     json_value_sep(mac_json);
     json_start_array(mac_json, NULL);
     for (int i = 0; i < MAX_SUP_VER; i++) {
-        wpabuf_printf(mac_json, "%s%u", i ? "," : "", data->server_attr->version[i]);
+        if (data->server_attr->version[i] > 0)
+            wpabuf_printf(mac_json, "%s%u", i ? "," : "", data->server_attr->version[i]);
     }
     json_end_array(mac_json);
 
@@ -1317,7 +1323,8 @@ static char * eap_noob_build_mac_input(const struct eap_noob_server_context * da
     json_value_sep(mac_json);
     json_start_array(mac_json, NULL);
     for (int i = 0; i < MAX_SUP_CSUITES; i++) {
-        wpabuf_printf(mac_json, "%s%u", i ? "," : "", data->server_attr->cryptosuite[i]);
+        if (data->server_attr->cryptosuite[i] > 0)
+            wpabuf_printf(mac_json, "%s%u", i ? "," : "", data->server_attr->cryptosuite[i]);
     }
     json_end_array(mac_json);
 
@@ -2867,6 +2874,12 @@ static void eap_noob_rsp_noobid(struct eap_noob_server_context * data)
 static void eap_noob_rsp_type_nine(struct eap_noob_server_context * data)
 {
     int result = FAILURE;
+    char * input = NULL;
+    const u8 * addr[1];
+    size_t len[1];
+    u8 hash[32];
+    char * hoob_b64;
+    int error = 0;
 
     // Initialize or reopen databases
     if (!(result = eap_noob_create_db(data))) {
@@ -2875,17 +2888,28 @@ static void eap_noob_rsp_type_nine(struct eap_noob_server_context * data)
 
     // Check whether new OOB data has arrived
     if (data->peer_attr->server_state == WAITING_FOR_OOB_STATE) {
-        if (FAILURE == eap_noob_exec_query(data, QUERY, columns_ephemeralnoob, 2, TEXT, data->peer_attr->peerid_rcvd)) {
+        if (FAILURE == eap_noob_exec_query(data, QUERY_EPHEMERALNOOB, columns_ephemeralnoob, 2, TEXT, data->peer_attr->peerid_rcvd)) {
             wpa_printf(MSG_DEBUG, "EAP-NOOB: Error while retrieving OOB data from the database");
             return FAILURE;
         }
 
         // Verify a locally generated Hoob against the one received out-of-band
-        char * input = eap_noob_build_mac_input(data, data->peer_attr->dir, data->peer_attr->server_state);
+        input = eap_noob_build_mac_input(data, data->peer_attr->dir, data->peer_attr->server_state);
         if (!input) {
             wpa_printf(MSG_DEBUG, "EAP-NOOB: Failed to build Hoob input");
             goto EXIT;
         }
+
+        addr[0] = (u8 *) input;
+        len[0] = os_strlen(input);
+
+        error = sha256_vector(1, addr, len, hash);
+
+        wpa_printf(MSG_DEBUG, "EAP-NOOB: Hoob input %s", input);
+        wpa_hexdump_ascii(MSG_DEBUG, "EAP-NOOB: Local Hoob", hash, 32);
+        eap_noob_Base64Encode(hash, 32, &hoob_b64);
+
+        wpa_printf(MSG_DEBUG, "EAP-NOOB: Local Hoob base64 %s", hoob_b64);
     }
 
     // Determine the next request message that the server should send to the peer
