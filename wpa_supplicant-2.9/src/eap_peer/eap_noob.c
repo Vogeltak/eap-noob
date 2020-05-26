@@ -1590,7 +1590,7 @@ static struct wpabuf * eap_noob_rsp_type_four(const struct eap_noob_peer_context
     wpa_printf(MSG_DEBUG, "EAP-NOOB: Entering %s", __func__);
 
     mac = eap_noob_gen_MAC(data, MACP_TYPE, data->server_attr->kdf_out->Kmp,
-            KMP_LEN, COMPLETION_EXCHANGE);
+            KMP_LEN, data->peer_attr->state);
     if (!mac) {
         goto EXIT;
     }
@@ -2195,7 +2195,7 @@ static struct wpabuf * eap_noob_req_type_seven(struct eap_sm * sm, struct eap_no
     if (SUCCESS != eap_noob_gen_KDF(data,RECONNECT_EXCHANGE)) {
     	wpa_printf(MSG_ERROR, "EAP-NOOB: Error in KDF during Request/NOOB-FR"); return NULL;
     }
-    mac = eap_noob_gen_MAC(data, MACS_TYPE, data->server_attr->kdf_out->Kms, KMS_LEN, RECONNECT_EXCHANGE);
+    mac = eap_noob_gen_MAC(data, MACS_TYPE, data->server_attr->kdf_out->Kms, KMS_LEN, RECONNECTING_STATE);
     if (NULL == mac) return NULL;
 
     if (0 != strcmp((char *)mac,data->server_attr->MAC)) {
@@ -2324,7 +2324,7 @@ static struct wpabuf * eap_noob_req_type_four(struct eap_sm * sm, struct eap_noo
     }
     if (NULL != (resp = eap_noob_verify_PeerId(data, id))) return resp;
 
-    mac = eap_noob_gen_MAC(data, MACS_TYPE, data->server_attr->kdf_out->Kms, KMS_LEN, COMPLETION_EXCHANGE);
+    mac = eap_noob_gen_MAC(data, MACS_TYPE, data->server_attr->kdf_out->Kms, KMS_LEN, data->server_attr->state);
     if (!mac) {
         wpabuf_free(resp);
         return NULL;

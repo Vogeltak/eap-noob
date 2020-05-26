@@ -1490,7 +1490,7 @@ static struct wpabuf * eap_noob_req_type_seven(struct eap_noob_server_context * 
     }
 
     // Generate the MAC
-    mac = eap_noob_gen_MAC(data, MACS_TYPE, data->peer_attr->kdf_out->Kms, KMS_LEN, RECONNECT_EXCHANGE);
+    mac = eap_noob_gen_MAC(data, MACS_TYPE, data->peer_attr->kdf_out->Kms, KMS_LEN, RECONNECTING_STATE);
     if (!mac) {
         goto EXIT;
     }
@@ -1700,7 +1700,7 @@ static struct wpabuf * eap_noob_req_type_four(struct eap_noob_server_context * d
     }
 
     mac = eap_noob_gen_MAC(data, MACS_TYPE, data->peer_attr->kdf_out->Kmp,
-            KMP_LEN, COMPLETION_EXCHANGE);
+            KMP_LEN, data->peer_attr->server_state);
     if (!mac) {
         goto EXIT;
     }
@@ -2624,7 +2624,7 @@ static void eap_noob_rsp_type_seven(struct eap_noob_server_context * data)
         eap_noob_set_done(data, NOT_DONE); return;
     }
     if (eap_noob_verify_peerId(data)) {
-        mac = eap_noob_gen_MAC(data, MACP_TYPE, data->peer_attr->kdf_out->Kmp, KMP_LEN, RECONNECT_EXCHANGE);
+        mac = eap_noob_gen_MAC(data, MACP_TYPE, data->peer_attr->kdf_out->Kmp, KMP_LEN, RECONNECTING_STATE);
         eap_noob_Base64Encode(mac, MAC_LEN, &mac_b64);
         if (0 != strcmp(data->peer_attr->mac, (char *)mac)) {
             eap_noob_set_error(data->peer_attr,E4001);
@@ -2720,7 +2720,7 @@ static void eap_noob_rsp_type_four(struct eap_noob_server_context * data)
     }
 
     if (eap_noob_verify_peerId(data)) {
-        mac = eap_noob_gen_MAC(data, MACP_TYPE, data->peer_attr->kdf_out->Kmp, KMP_LEN, COMPLETION_EXCHANGE);
+        mac = eap_noob_gen_MAC(data, MACP_TYPE, data->peer_attr->kdf_out->Kmp, KMP_LEN, data->peer_attr->peer_state);
         eap_noob_Base64Encode(mac, MAC_LEN, &mac_b64);
         if (0 != strcmp(data->peer_attr->mac, (char *)mac)) {
             eap_noob_set_error(data->peer_attr,E4001); eap_noob_set_done(data, NOT_DONE); goto EXIT;
