@@ -1725,7 +1725,7 @@ static struct wpabuf * eap_noob_req_type_four(struct eap_noob_server_context * d
     json_end_object(json);
 
     json_str = strndup(wpabuf_head(json), wpabuf_len(json));
-    len = os_strlen(json_str);
+    len = os_strlen(json_str) + 1;
 
     resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB, len, EAP_CODE_REQUEST, id);
     if (!resp) {
@@ -1783,7 +1783,7 @@ static struct wpabuf * eap_noob_req_type_three(struct eap_noob_server_context * 
     json_str = strndup(wpabuf_head(json), wpabuf_len(json));
     len = os_strlen(json_str);
 
-    resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB, len, EAP_CODE_RESPONSE, id);
+    resp = eap_msg_alloc(EAP_VENDOR_IETF, EAP_TYPE_NOOB, len, EAP_CODE_REQUEST, id);
     if (resp == NULL) {
         wpa_printf(MSG_DEBUG, "EAP-NOOB: Failed to allocate memory for Response/NOOB-WE");
         goto EXIT;
@@ -2879,7 +2879,7 @@ static void eap_noob_rsp_noobid(struct eap_noob_server_context * data)
 
 static void eap_noob_rsp_type_nine(struct eap_noob_server_context * data)
 {
-    int result = FAILURE;
+    int result = SUCCESS;
     char * input = NULL;
     const u8 * addr[1];
     size_t len[1];
@@ -2892,31 +2892,62 @@ static void eap_noob_rsp_type_nine(struct eap_noob_server_context * data)
         goto EXIT;
     }
 
-    wpa_printf(MSG_DEBUG, "EAP-NOOB: In %s, server state = %u", __func__, data->peer_attr->server_state);
-    // Check whether new OOB data has arrived
+    // TODO: Are these checks really necessary? Aren't these the only states in
+    // which a message of type 9 is exchanged anyhow?
+    if (data->peer_attr->server_state == UNREGISTERED_STATE ||
+        data->peer_attr->server_state == WAITING_FOR_OOB_STATE ||
+        data->peer_attr->server_state == RECONNECTING_STATE) {
+        if (FAILURE == (result = eap_noob_read_config(data))) {
+            goto EXIT;
+        }
+    }
+
+    // Check whether new OOB data has arrived, if so, verify the Hoob
     if (data->peer_attr->server_state == WAITING_FOR_OOB_STATE) {
+        // Retrieve OOB data from the database
         if (FAILURE == eap_noob_exec_query(data, QUERY_EPHEMERALNOOB, columns_ephemeralnoob, 2, TEXT, data->peer_attr->peerid_rcvd)) {
             wpa_printf(MSG_DEBUG, "EAP-NOOB: Error while retrieving OOB data from the database");
-            return FAILURE;
-        }
-
-        // Verify a locally generated Hoob against the one received out-of-band
-        input = eap_noob_build_mac_input(data, data->peer_attr->dir, data->peer_attr->server_state);
-        if (!input) {
-            wpa_printf(MSG_DEBUG, "EAP-NOOB: Failed to build Hoob input");
+            result = FAILURE;
             goto EXIT;
         }
 
-        addr[0] = (u8 *) input;
-        len[0] = os_strlen(input);
+        // There must be OOB data available before continuing
+        if (data->peer_attr->oob_data->Hoob_b64 &&
+            data->peer_attr->oob_data->Noob_b64) {
+            // Build the Hoob input for the local calculation
+            input = eap_noob_build_mac_input(data, data->peer_attr->dir, data->peer_attr->server_state);
+            if (!input) {
+                wpa_printf(MSG_DEBUG, "EAP-NOOB: Failed to build Hoob input");
+                result = FAILURE;
+                goto EXIT;
+            }
 
-        error = sha256_vector(1, addr, len, hash);
+            addr[0] = (u8 *) input;
+            len[0] = os_strlen(input);
 
-        wpa_printf(MSG_DEBUG, "EAP-NOOB: Hoob input %s", input);
-        wpa_hexdump_ascii(MSG_DEBUG, "EAP-NOOB: Local Hoob", hash, 32);
-        eap_noob_Base64Encode(hash, 32, &hoob_b64);
+            // Perform the SHA-256 hash operation on the Hoob input
+            error = sha256_vector(1, addr, len, hash);
+            if (error) {
+                wpa_printf(MSG_DEBUG, "EAP-NOOB: Error while creating SHA-256 hash");
+                result = FAILURE;
+                goto EXIT;
+            }
 
-        wpa_printf(MSG_DEBUG, "EAP-NOOB: Local Hoob base64 %s", hoob_b64);
+            // Encode the Hoob in base64
+            // As per the specification in the EAP-NOOB standard, the length of the
+            // Hoob should be 16 bytes, which is 22 bytes after base64 encoding.
+            eap_noob_Base64Encode(hash, 16, &hoob_b64);
+            wpa_printf(MSG_DEBUG, "EAP-NOOB: Local Hoob base64 %s", hoob_b64);
+
+            // Verify the locally generated Hoob against the one received out-of-band
+            if (!os_strcmp(hoob_b64, data->peer_attr->oob_data->Hoob_b64)) {
+                // Both Hoobs are equal, thus the received OOB data is valid and
+                // the server moves on to the next state.
+                eap_noob_change_state(data, OOB_RECEIVED_STATE);
+            } else {
+                wpa_printf(MSG_INFO, "EAP-NOOB: Received Hoob does not match local Hoob");
+            }
+        }
     }
 
     // Determine the next request message that the server should send to the peer
@@ -2927,13 +2958,6 @@ static void eap_noob_rsp_type_nine(struct eap_noob_server_context * data)
         wpa_printf(MSG_ERROR, "EAP-NOOB: Could not get next request type, error in peer attr: %d", data->peer_attr->err_code);
         result = FAILURE;
         goto EXIT;
-    }
-
-    if (data->peer_attr->server_state == UNREGISTERED_STATE ||
-        data->peer_attr->server_state == RECONNECTING_STATE) {
-        if (FAILURE == (result = eap_noob_read_config(data))) {
-            goto EXIT;
-        }
     }
 EXIT:
     if (result == FAILURE) {
