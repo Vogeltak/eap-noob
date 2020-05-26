@@ -488,6 +488,8 @@ static void columns_ephemeralstate(struct eap_noob_peer_context * data, sqlite3_
     //data->server_attr->creation_time = (uint64_t) sqlite3_column_int64(stmt, 11);
     data->server_attr->err_code = sqlite3_column_int(stmt, 12);
     data->server_attr->state = sqlite3_column_int(stmt, 13);
+    data->server_attr->ecdh_exchange_data->jwk_serv = os_strdup((char *) sqlite3_column_text(stmt, 14));
+    data->server_attr->ecdh_exchange_data->jwk_peer = os_strdup((char *) sqlite3_column_text(stmt, 15));
     eap_noob_decode_vers_cryptosuites(data, Vers, Cryptosuites);
 }
 
@@ -1444,13 +1446,14 @@ static int eap_noob_db_update_initial_exchange_info(struct eap_sm * sm, struct e
     if (err < 0) { ret = FAILURE; goto EXIT; }
 
     snprintf(query, MAX_QUERY_LEN,"INSERT INTO EphemeralState (Ssid, PeerId, Vers, Cryptosuites, Realm, Dirs, "
-            "ServerInfo, Ns, Np, Z, MacInput, PeerState) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-    ret = eap_noob_exec_query(data, query, NULL, 27, TEXT, wpa_s->current_ssid->ssid, TEXT, data->server_attr->PeerId,
+            "ServerInfo, Ns, Np, Z, MacInput, PeerState, JwkServer, JwkPeer) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    ret = eap_noob_exec_query(data, query, NULL, 31, TEXT, wpa_s->current_ssid->ssid, TEXT, data->server_attr->PeerId,
             TEXT,  Vers, TEXT, Cryptosuites, TEXT, data->server_attr->Realm, INT, data->server_attr->dir,
             TEXT, data->server_attr->server_info, BLOB, NONCE_LEN, data->server_attr->kdf_nonce_data->Ns, BLOB,
             NONCE_LEN, data->server_attr->kdf_nonce_data->Np, BLOB, ECDH_SHARED_SECRET_LEN,
             data->server_attr->ecdh_exchange_data->shared_key, TEXT, data->server_attr->mac_input_str, INT,
-            data->server_attr->state);
+            data->server_attr->state, TEXT, data->server_attr->ecdh_exchange_data->jwk_serv,
+            TEXT, data->server_attr->ecdh_exchange_data->jwk_peer);
 
     if (FAILURE == ret) {
         wpa_printf(MSG_ERROR, "EAP-NOOB: DB value insertion failed");

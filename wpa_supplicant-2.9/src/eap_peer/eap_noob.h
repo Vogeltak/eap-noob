@@ -154,7 +154,9 @@
     MacInput TEXT,                                  \
     creation_time  BIGINT,                          \
     ErrorCode INT,                                  \
-    PeerState INTEGER);                             \
+    PeerState INTEGER,                              \
+    JwkServer TEXT,                                 \
+    JwkPeer TEXT);                                  \
                                                     \
     CREATE TABLE IF NOT EXISTS EphemeralNoob(       \
     Ssid TEXT NOT NULL REFERENCES EphemeralState(Ssid), \
