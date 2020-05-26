@@ -667,10 +667,6 @@ static u8 * eap_noob_gen_MAC(const struct eap_noob_peer_context * data, int type
     // Build the MAC input string and store it
     data->server_attr->mac_input_str = eap_noob_build_mac_input(data, type, state);
 
-    wpa_printf(MSG_DEBUG, "EAP-NOOB: In %s: MAC=%s, length=%d", __func__,
-            data->server_attr->mac_input_str,
-            (int) os_strlen(data->server_attr->mac_input_str));
-
     // Calculate MAC
     mac = HMAC(EVP_sha256(), key, keylen,
             (u8 *) data->server_attr->mac_input_str,
@@ -1431,7 +1427,9 @@ static int eap_noob_db_update(struct eap_noob_peer_context * data, u8 type)
 static int eap_noob_db_update_initial_exchange_info(struct eap_sm * sm, struct eap_noob_peer_context * data)
 {
     struct wpa_supplicant * wpa_s = NULL;
-    char query[MAX_QUERY_LEN] = {0}, * Vers, * Cryptosuites;
+    char query[MAX_QUERY_LEN] = {0};
+    char * Vers = NULL;
+    char * Cryptosuites = NULL;
     int ret = 0, err = 0;
 
     if (NULL == data || NULL == sm) {
@@ -1460,25 +1458,27 @@ static int eap_noob_db_update_initial_exchange_info(struct eap_sm * sm, struct e
     }
 EXIT:
     wpa_printf(MSG_DEBUG, "EAP-NOOB: Exiting %s",__func__);
-    EAP_NOOB_FREE(Vers); EAP_NOOB_FREE(Cryptosuites);
+    if (Vers)
+        EAP_NOOB_FREE(Vers);
+    if (Cryptosuites)
+        EAP_NOOB_FREE(Cryptosuites);
     return ret;
 }
 
 static int eap_noob_update_persistentstate(struct eap_noob_peer_context * data)
 {
-    char query[MAX_QUERY_LEN] = {0}, * Vers, * Cryptosuites;
+    char query[MAX_QUERY_LEN] = {0};
     int ret = SUCCESS, err = 0;
 
     if (NULL == data) { wpa_printf(MSG_DEBUG, "EAP-NOOB: Input to %s is null", __func__); return FAILURE; }
     wpa_printf(MSG_DEBUG, "EAP-NOOB: Entering %s",__func__);
 
     err -= (FAILURE == eap_noob_db_statements(data->peer_db, DELETE_EPHEMERAL_FOR_ALL));
-    err -= (FAILURE == eap_noob_encode_vers_cryptosuites(data, &Vers, &Cryptosuites));
     if (err < 0) { ret = FAILURE; goto EXIT; }
     /* snprintf(query, MAX_QUERY_LEN, "INSERT INTO PersistentState (Ssid, PeerId, Vers, Cryptosuites, Realm, Kz, "
         "creation_time, last_used_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"); */
-    snprintf(query, MAX_QUERY_LEN, "INSERT INTO PersistentState (Ssid, PeerId, Vers, Cryptosuites, Realm, Kz, PeerState) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)");
+    snprintf(query, MAX_QUERY_LEN, "INSERT INTO PersistentState (Ssid, PeerId, Verp, Cryptosuitep, CryptosuitepPrev, Realm, Kz, KzPrev, PeerState) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
 
     if(data->server_attr->kdf_out->Kz){
     	 wpa_printf(MSG_DEBUG, "NOT NULL and state %d",data->server_attr->state);
@@ -1488,13 +1488,12 @@ static int eap_noob_update_persistentstate(struct eap_noob_peer_context * data)
 
 
 
-    err -= (FAILURE == eap_noob_exec_query(data, query, NULL, 15, TEXT, data->server_attr->ssid, TEXT, data->server_attr->PeerId,
-            TEXT, Vers, TEXT, Cryptosuites, TEXT, data->server_attr->Realm, BLOB, KZ_LEN, data->server_attr->kdf_out->Kz,
+    err -= (FAILURE == eap_noob_exec_query(data, query, NULL, 20, TEXT, data->server_attr->ssid, TEXT, data->server_attr->PeerId,
+            INT, data->peer_attr->version, INT, data->peer_attr->cryptosuite, INT, data->peer_attr->cryptosuite, TEXT, data->server_attr->Realm, BLOB, KZ_LEN, data->server_attr->kdf_out->Kz, BLOB, KZ_LEN, data->server_attr->kdf_out->Kz,
             INT, data->server_attr->state));
     if (err < 0) { ret = FAILURE; goto EXIT; }
 EXIT:
     wpa_printf(MSG_DEBUG, "EAP-NOOB: Exiting %s, return %d",__func__, ret);
-    EAP_NOOB_FREE(Vers); EAP_NOOB_FREE(Cryptosuites);
     return ret;
 }
 

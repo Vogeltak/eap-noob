@@ -171,12 +171,12 @@
     "CREATE TABLE IF NOT EXISTS PersistentState(    \
     Ssid TEXT NOT NULL,                             \
     PeerId TEXT NOT NULL,                           \
-    Verp TEXT NOT NULL,                             \
-    Cryptosuitep TEXT NOT NULL,                     \
-    CryptosuitepPrev TEXT NOT NULL,                 \
+    Verp INT NOT NULL,                              \
+    Cryptosuitep INT NOT NULL,                      \
+    CryptosuitepPrev INT,                           \
     Realm TEXT,                                     \
     Kz BLOB NOT NULL,                               \
-    KzPrev BLOB NOT NULL,                           \
+    KzPrev BLOB,                                    \
     PeerState INT,                                  \
     creation_time BIGINT,                           \
     last_used_time BIGINT)"

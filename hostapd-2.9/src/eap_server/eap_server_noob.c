@@ -1442,10 +1442,6 @@ static u8 * eap_noob_gen_MAC(const struct eap_noob_server_context * data, int ty
     // Build the MAC input and store it
     data->peer_attr->mac_input_str = eap_noob_build_mac_input(data, type, state);
 
-    wpa_printf(MSG_DEBUG, "EAP-NOOB: In %s: MAC=%s, length=%d", __func__,
-            data->peer_attr->mac_input_str,
-            (int) os_strlen(data->peer_attr->mac_input_str));
-
     // Calculate MAC
     mac = HMAC(EVP_sha256(), key, keylen,
             (u8 *) data->peer_attr->mac_input_str,
@@ -1699,8 +1695,8 @@ static struct wpabuf * eap_noob_req_type_four(struct eap_noob_server_context * d
         goto EXIT;
     }
 
-    mac = eap_noob_gen_MAC(data, MACS_TYPE, data->peer_attr->kdf_out->Kmp,
-            KMP_LEN, data->peer_attr->server_state);
+    mac = eap_noob_gen_MAC(data, MACS_TYPE, data->peer_attr->kdf_out->Kms,
+            KMS_LEN, data->peer_attr->server_state);
     if (!mac) {
         goto EXIT;
     }
