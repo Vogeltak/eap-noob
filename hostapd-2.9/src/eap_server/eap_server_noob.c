@@ -227,6 +227,8 @@ static void columns_ephemeralstate(struct eap_noob_server_context * data, sqlite
     data->peer_attr->err_code = sqlite3_column_int(stmt, 11);
     data->peer_attr->sleep_count = sqlite3_column_int(stmt, 12);
     data->peer_attr->server_state = sqlite3_column_int(stmt, 13);
+    data->peer_attr->ecdh_exchange_data->jwk_serv = os_strdup((char *) sqlite3_column_text(stmt, 14));
+    data->peer_attr->ecdh_exchange_data->jwk_peer = os_strdup((char *) sqlite3_column_text(stmt, 15));
 }
 
 static void columns_ephemeralnoob(struct eap_noob_server_context * data, sqlite3_stmt * stmt)
@@ -368,12 +370,13 @@ static int eap_noob_db_functions(struct eap_noob_server_context * data, u8 type)
             break;
         case UPDATE_INITIALEXCHANGE_INFO:
             os_snprintf(query, MAX_LINE_SIZE, "INSERT INTO EphemeralState ( PeerId, Verp, Cryptosuitep, Realm, Dirp, PeerInfo, "
-                  "Ns, Np, Z, MacInput, SleepCount, ServerState) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-            ret = eap_noob_exec_query(data, query, NULL, 27, TEXT, data->peer_attr->PeerId, INT, data->peer_attr->version,
+                  "Ns, Np, Z, MacInput, SleepCount, ServerState, JwkServer, JwkPeer) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            ret = eap_noob_exec_query(data, query, NULL, 31, TEXT, data->peer_attr->PeerId, INT, data->peer_attr->version,
                   INT, data->peer_attr->cryptosuite, TEXT, server_conf.realm, INT, data->peer_attr->dir, TEXT,
                   data->peer_attr->peerinfo, BLOB, NONCE_LEN, data->peer_attr->kdf_nonce_data->Ns, BLOB, NONCE_LEN,
                   data->peer_attr->kdf_nonce_data->Np, BLOB, ECDH_SHARED_SECRET_LEN, data->peer_attr->ecdh_exchange_data->shared_key,
-                  TEXT, "", INT, data->peer_attr->sleep_count, INT, data->peer_attr->server_state);
+                  TEXT, data->peer_attr->mac_input_str, INT, data->peer_attr->sleep_count, INT, data->peer_attr->server_state,
+                  TEXT, data->peer_attr->ecdh_exchange_data->jwk_serv, TEXT, data->peer_attr->ecdh_exchange_data->jwk_peer);
             os_free(dump_str);
             break;
         case GET_NOOBID:
@@ -807,6 +810,7 @@ static int eap_noob_read_config(struct eap_noob_server_context * data)
 
     data->server_attr->server_info =  eap_noob_prepare_server_info_string(data->server_attr->server_config_params);
     if(!data->server_attr->server_info){
+        wpa_printf(MSG_DEBUG, "EAP-NOOB: Failed to prepare ServerInfo string!");
         ret = FAILURE; goto ERROR_EXIT;
     }
 
@@ -1329,14 +1333,14 @@ static char * eap_noob_build_mac_input(const struct eap_noob_server_context * da
     json_end_array(mac_json);
 
     // Direction supported by the server
-    if (state == RECONNECT_EXCHANGE) {
+    if (state == RECONNECTING_STATE) {
         wpabuf_printf(mac_json, ",\"\"");
     } else {
         wpabuf_printf(mac_json, ",%u", data->server_attr->dir);
     }
 
     // Server info object
-    if (state == RECONNECT_EXCHANGE) {
+    if (state == RECONNECTING_STATE) {
         wpabuf_printf(mac_json, ",\"\"");
     } else {
         wpabuf_printf(mac_json, ",%s", data->server_attr->server_info);
@@ -1346,7 +1350,7 @@ static char * eap_noob_build_mac_input(const struct eap_noob_server_context * da
     wpabuf_printf(mac_json, ",%u", data->peer_attr->cryptosuite);
 
     // Direction supported by the peer
-    if (state == RECONNECT_EXCHANGE) {
+    if (state == RECONNECTING_STATE) {
         wpabuf_printf(mac_json, ",\"\"");
     } else {
         wpabuf_printf(mac_json, ",%u", data->peer_attr->dir);
@@ -1356,26 +1360,28 @@ static char * eap_noob_build_mac_input(const struct eap_noob_server_context * da
     // Otherwise, insert an empty string
     if (data->peer_attr->Realm) {
         wpabuf_printf(mac_json, ",\"%s\"", data->peer_attr->Realm);
+    } else if (server_conf.realm) {
+        wpabuf_printf(mac_json, ",\"%s\"", server_conf.realm);
     } else {
         wpabuf_printf(mac_json, ",\"\"");
     }
 
     // Peer info object
-    if (state == RECONNECT_EXCHANGE) {
+    if (state == RECONNECTING_STATE) {
         wpabuf_printf(mac_json, ",\"\"");
     } else {
         wpabuf_printf(mac_json, ",%s", data->peer_attr->peerinfo);
     }
 
     // KeyingMode
-    if (state == RECONNECT_EXCHANGE) {
+    if (state == RECONNECTING_STATE) {
         wpabuf_printf(mac_json, ",%u", data->server_attr->keying_mode);
     } else {
         wpabuf_printf(mac_json, ",0");
     }
 
     // Public key server
-    if (state == RECONNECT_EXCHANGE) {
+    if (state == RECONNECTING_STATE) {
         wpabuf_printf(mac_json, ",\"\"");
     } else {
         wpabuf_printf(mac_json, ",%s", data->peer_attr->ecdh_exchange_data->jwk_serv);
@@ -1386,7 +1392,7 @@ static char * eap_noob_build_mac_input(const struct eap_noob_server_context * da
     wpabuf_printf(mac_json, ",\"%s\"", nonce);
 
     // Public key peer
-    if (state == RECONNECT_EXCHANGE) {
+    if (state == RECONNECTING_STATE) {
         wpabuf_printf(mac_json, ",\"\"");
     } else {
         wpabuf_printf(mac_json, ",%s", data->peer_attr->ecdh_exchange_data->jwk_peer);
@@ -1397,7 +1403,7 @@ static char * eap_noob_build_mac_input(const struct eap_noob_server_context * da
     wpabuf_printf(mac_json, ",\"%s\"", nonce);
 
     // Nonce out of band
-    if (state == RECONNECT_EXCHANGE || !data->peer_attr->oob_data->Noob_b64) {
+    if (state == RECONNECTING_STATE || !data->peer_attr->oob_data->Noob_b64) {
         wpabuf_printf(mac_json, ",\"\"");
     } else {
         wpabuf_printf(mac_json, ",\"%s\"", data->peer_attr->oob_data->Noob_b64);
@@ -2886,6 +2892,7 @@ static void eap_noob_rsp_type_nine(struct eap_noob_server_context * data)
         goto EXIT;
     }
 
+    wpa_printf(MSG_DEBUG, "EAP-NOOB: In %s, server state = %u", __func__, data->peer_attr->server_state);
     // Check whether new OOB data has arrived
     if (data->peer_attr->server_state == WAITING_FOR_OOB_STATE) {
         if (FAILURE == eap_noob_exec_query(data, QUERY_EPHEMERALNOOB, columns_ephemeralnoob, 2, TEXT, data->peer_attr->peerid_rcvd)) {

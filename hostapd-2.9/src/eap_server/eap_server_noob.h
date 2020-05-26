@@ -155,7 +155,9 @@
     CreationTime BIGINT,                            \
     ErrorCode INTEGER,                              \
     SleepCount INTEGER,                             \
-    ServerState INTEGER);                           \
+    ServerState INTEGER,                            \
+    JwkServer TEXT,                                 \
+    JwkPeer TEXT);                                  \
                                                     \
     CREATE TABLE IF NOT EXISTS EphemeralNoob(       \
     PeerId TEXT NOT NULL REFERENCES EphemeralState(PeerId), \
