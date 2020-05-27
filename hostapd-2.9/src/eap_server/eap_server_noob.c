@@ -2899,7 +2899,8 @@ static void eap_noob_rsp_type_nine(struct eap_noob_server_context * data)
     }
 
     // Check whether new OOB data has arrived, if so, verify the Hoob
-    if (data->peer_attr->server_state == WAITING_FOR_OOB_STATE) {
+    if (data->peer_attr->server_state == WAITING_FOR_OOB_STATE &&
+        data->peer_attr->dir == PEER_TO_SERVER) {
         // Retrieve OOB data from the database
         if (FAILURE == eap_noob_exec_query(data, QUERY_EPHEMERALNOOB, columns_ephemeralnoob, 2, TEXT, data->peer_attr->peerid_rcvd)) {
             wpa_printf(MSG_DEBUG, "EAP-NOOB: Error while retrieving OOB data from the database");
