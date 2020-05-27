@@ -8,10 +8,12 @@ from datetime import datetime
 import hashlib
 import json
 import os
+import re
 import sqlite3
 
 db_path_server = '/tmp/noob_server.db'
 db_path_peer = '/tmp/noob_peer.db'
+peer_config_path = '../../wpa_supplicant/eapnoob.conf'
 
 def exec_query(query, db_path, args=[]):
     if not os.path.isfile(db_path_server):
@@ -37,6 +39,15 @@ def get_peers():
     data = exec_query(query, db_path_peer)
     return data
 
+def get_direction():
+    dir_keyword = 'OobDirs'
+    with open(peer_config_path, 'r') as f:
+        for line in f:
+            if '#' != line[0] and dir_keyword in line:
+                parts = re.sub('[\s+]', '', line)
+                direction = parts[len(dir_keyword) + 1]
+    return direction
+
 def gen_noob():
     """Generate a random 16 byte secret nonce"""
 
@@ -59,7 +70,11 @@ def compute_hoob(peer_id, noob, direction):
     """Compute 16-byte fingerprint from all exchanged parameters"""
 
     query = 'SELECT MacInput FROM EphemeralState WHERE PeerId=?'
-    data = exec_query(query, db_path_peer, [peer_id])
+    if direction == 1:
+        db_path = db_path_peer
+    else:
+        db_path = db_path_server
+    data = exec_query(query, db_path, [peer_id])
     if data is None:
         print('Query returned None in gen_noob')
         return None
@@ -91,7 +106,12 @@ def transfer_oob(ssid, peer_id, direction):
 
     exec_query(query, db_path_server, args)
 
+    if direction == '1':
+        print(f'Successfully transferred the out-of-band data in peer-to-server direction')
+    else:
+        print(f'Successfully transferred the out-of-band data in server-to-peer direction')
 
 if __name__ == '__main__':
+    direction = get_direction()
     peer = get_peers()
-    transfer_oob(peer[0], peer[1], 1)
+    transfer_oob(peer[0], peer[1], direction)

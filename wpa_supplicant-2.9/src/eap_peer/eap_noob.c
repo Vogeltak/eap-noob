@@ -48,6 +48,7 @@
 #include <sqlite3.h>
 #include "common.h"
 #include "json.h"
+#include "crypto/crypto.h"
 #include "eap_i.h"
 #include "eap_noob.h"
 #include "../../wpa_supplicant/config.h"
@@ -3026,7 +3027,14 @@ static int eap_noob_peer_ctxt_alloc(struct eap_sm *sm,  struct eap_noob_peer_con
 **/
 static int eap_noob_peer_ctxt_init(struct eap_sm * sm,  struct eap_noob_peer_context * data)
 {
+    char * input = NULL;
+    const u8 * addr[1];
+    size_t len[1];
+    u8 hash[32];
+    char * hoob_b64;
+    int error = 0;
     int retval = FAILURE;
+
     if (FAILURE == (retval = eap_noob_peer_ctxt_alloc(sm, data))) {
         wpa_printf(MSG_DEBUG, "EAP-NOOB: Error in allocating peer context");
         goto EXIT;
@@ -3044,6 +3052,54 @@ static int eap_noob_peer_ctxt_init(struct eap_sm * sm,  struct eap_noob_peer_con
     if (FAILURE == eap_noob_read_config(sm,data)) {
         wpa_printf(MSG_ERROR, "EAP-NOOB: Failed to initialize context");
         goto EXIT;
+    }
+
+    // Check whether new OOB data has arrived, and if so, verify the Hoob
+    if (data->server_attr->state == WAITING_FOR_OOB_STATE &&
+        data->peer_attr->dir == SERV_TO_PEER) {
+        if (FAILURE == eap_noob_exec_query(data, QUERY_EPHEMERALNOOB, columns_ephemeralnoob, 2, TEXT, data->server_attr->PeerId)) {
+            wpa_printf(MSG_DEBUG, "EAP-NOOB: Error while retrieving OOB data from the database");
+            retval = FAILURE;
+            goto EXIT;
+        }
+
+        // There must be OOB data available before continuing
+        if (data->server_attr->oob_data->Hoob_b64 &&
+            data->server_attr->oob_data->Noob_b64) {
+            // Build the Hoob input for the local calculation
+            input = eap_noob_build_mac_input(data, data->peer_attr->dir, data->server_attr->state);
+            if (!input) {
+                wpa_printf(MSG_DEBUG, "EAP-NOOB: Failed to build Hoob input");
+                retval = FAILURE;
+                goto EXIT;
+            }
+
+            addr[0] = (u8 *) input;
+            len[0] = os_strlen(input);
+
+            // Perform the SHA-256 hash operation on the Hoob input
+            error = sha256_vector(1, addr, len, hash);
+            if (error) {
+                wpa_printf(MSG_DEBUG, "EAP-NOOB: Error while creating SHA-256 hash");
+                retval = FAILURE;
+                goto EXIT;
+            }
+
+            // Encode the Hoob in base64
+            // As per the specification in the EAP-NOOB standard, the length of the
+            // Hoob should be 16 bytes, which is 22 bytes after base64 encoding.
+            eap_noob_Base64Encode(hash, 16, &hoob_b64);
+            wpa_printf(MSG_DEBUG, "EAP-NOOB: Local Hoob base64 %s", hoob_b64);
+
+            // Verify the locally generated Hoob against the one received out-of-band
+            if (!os_strcmp(hoob_b64, data->server_attr->oob_data->Hoob_b64)) {
+                // Both Hoobs are equal, thus the received OOB data is valid and
+                // the server moves on to the next state.
+                data->server_attr->state = OOB_RECEIVED_STATE;
+            } else {
+                wpa_printf(MSG_INFO, "EAP-NOOB: Received Hoob does not match local Hoob");
+            }
+        }
     }
 
 EXIT:
