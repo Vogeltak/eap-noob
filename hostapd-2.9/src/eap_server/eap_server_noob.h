@@ -59,6 +59,9 @@
 #define DONE                    1
 #define NOT_DONE                0
 
+/* Default maximum value for OOB retries */
+#define DEFAULT_MAX_OOB_RETRIES 5
+
 /* Maximum allowed waiting exchages */
 #define MAX_WAIT_EXCHNG_TRIES   5
 
@@ -126,6 +129,7 @@
 #define WE_COUNT_RCVD           0x2000
 #define REALM_RCVD              0x4000
 #define ENCODE_RCVD             0x8000
+#define MAX_OOB_RETRIES_RCVD   0x10000
 
 #define TYPE_ONE_PARAMS         (PEERID_RCVD|VERSION_RCVD|CRYPTOSUITEP_RCVD|DIRP_RCVD|INFO_RCVD)
 #define TYPE_TWO_PARAMS         (PEERID_RCVD|NONCE_RCVD|PKEY_RCVD)
@@ -136,7 +140,7 @@
 #define TYPE_SEVEN_PARAMS       (PEERID_RCVD|MAC_RCVD)
 #define TYPE_EIGHT_PARAMS       (PEERID_RCVD|NOOBID_RCVD)
 
-#define CONF_PARAMS             (DIRP_RCVD|CRYPTOSUITEP_RCVD|VERSION_RCVD|SERVER_NAME_RCVD|SERVER_URL_RCVD|WE_COUNT_RCVD|REALM_RCVD|ENCODE_RCVD)
+#define CONF_PARAMS             (DIRP_RCVD|CRYPTOSUITEP_RCVD|VERSION_RCVD|SERVER_NAME_RCVD|SERVER_URL_RCVD|WE_COUNT_RCVD|REALM_RCVD|ENCODE_RCVD|MAX_OOB_RETRIES_RCVD)
 #define DB_NAME                 "/tmp/noob_server.db"
 #define DEVICE_TABLE            "devices"
 
@@ -157,7 +161,8 @@
     SleepCount INTEGER,                             \
     ServerState INTEGER,                            \
     JwkServer TEXT,                                 \
-    JwkPeer TEXT);                                  \
+    JwkPeer TEXT,                                   \
+    OobRetries INTEGER);                            \
                                                     \
     CREATE TABLE IF NOT EXISTS EphemeralNoob(       \
     PeerId TEXT NOT NULL REFERENCES EphemeralState(PeerId), \
@@ -211,7 +216,7 @@ enum {UNREGISTERED_STATE, WAITING_FOR_OOB_STATE, OOB_RECEIVED_STATE, RECONNECTIN
 enum {NONE, EAP_NOOB_TYPE_1, EAP_NOOB_TYPE_2, EAP_NOOB_TYPE_3, EAP_NOOB_TYPE_4, EAP_NOOB_TYPE_5,
     EAP_NOOB_TYPE_6, EAP_NOOB_TYPE_7, EAP_NOOB_TYPE_8, EAP_NOOB_TYPE_9};
 
-enum {UPDATE_PERSISTENT_STATE, UPDATE_STATE_MINSLP, UPDATE_PERSISTENT_KEYS_SECRET, UPDATE_STATE_ERROR,
+enum {UPDATE_PERSISTENT_STATE, UPDATE_OOB_RETRIES, UPDATE_STATE_MINSLP, UPDATE_PERSISTENT_KEYS_SECRET, UPDATE_STATE_ERROR,
     UPDATE_INITIALEXCHANGE_INFO, GET_NOOBID};
 
 enum eap_noob_err_code {NO_ERROR, E1001, E1002, E1003, E1004, E1007, E2001, E2002,
@@ -279,6 +284,7 @@ struct eap_noob_peer_data {
     u32 recv_msg;
     u32 rcvd_params;
     u32 sleep_count;
+    u32 oob_retries;
     int oob_recv;
 
     u8 peer_state;
@@ -326,6 +332,7 @@ struct eap_noob_server_data {
     char * server_info;
     u32 config_params;
     struct eap_noob_server_config_params * server_config_params;
+    u32  max_oob_retries;
 };
 
 struct eap_noob_server_context {

@@ -58,6 +58,9 @@
 #define INVALID                 0
 #define VALID                   1
 
+/* Default maximum value for OOB retries */
+#define DEFAULT_MAX_OOB_RETRIES 5
+
 /* Keying modes, as defined in Table 3 of draft 8 */
 #define KEYING_COMPLETION_EXCHANGE 0
 #define KEYING_RECONNECT_EXCHANGE_NO_ECDHE 1
@@ -126,6 +129,7 @@
 #define DEF_MIN_SLEEP_RCVD          0x2000
 #define MSG_ENC_FMT_RCVD            0x4000
 #define PEER_TYPE_RCVD              0x8000
+#define MAX_OOB_RETRIES_RCVD       0x10000
 
 
 #define TYPE_ONE_PARAMS             (PEERID_RCVD|VERSION_RCVD|CRYPTOSUITES_RCVD|DIRS_RCVD|INFO_RCVD)
@@ -136,7 +140,7 @@
 #define TYPE_SIX_PARAMS             (PEERID_RCVD|NONCE_RCVD)
 #define TYPE_SEVEN_PARAMS           (PEERID_RCVD|MAC_RCVD)
 #define TYPE_HINT_PARAMS            (PEERID_RCVD)
-#define CONF_PARAMS                 (DIRS_RCVD|CRYPTOSUITES_RCVD|VERSION_RCVD|PEER_TYPE_RCVD|PEER_ID_NUM_RCVD|PEER_TYPE_RCVD)
+#define CONF_PARAMS                 (DIRS_RCVD|CRYPTOSUITES_RCVD|VERSION_RCVD|PEER_TYPE_RCVD|PEER_ID_NUM_RCVD|PEER_TYPE_RCVD|MAX_OOB_RETRIES_RCVD)
 
 
 #define CREATE_TABLES_EPHEMERALSTATE                \
@@ -156,7 +160,8 @@
     ErrorCode INT,                                  \
     PeerState INTEGER,                              \
     JwkServer TEXT,                                 \
-    JwkPeer TEXT);                                  \
+    JwkPeer TEXT,                                   \
+    OobRetries);                                    \
                                                     \
     CREATE TABLE IF NOT EXISTS EphemeralNoob(       \
     Ssid TEXT NOT NULL REFERENCES EphemeralState(Ssid), \
@@ -218,7 +223,7 @@ enum {NONE, EAP_NOOB_TYPE_1, EAP_NOOB_TYPE_2, EAP_NOOB_TYPE_3, EAP_NOOB_TYPE_4, 
 enum eap_noob_err_code {NO_ERROR, E1001, E1002, E1003, E1004, E1007, E2001, E2002,
                         E2003, E2004, E3001, E3002, E3003, E4001, E5001, E5002, E5003, E5004};
 
-enum {UPDATE_PERSISTENT_STATE, UPDATE_STATE_ERROR, DELETE_SSID};
+enum {UPDATE_PERSISTENT_STATE, UPDATE_OOB_RETRIES, UPDATE_STATE_ERROR, DELETE_SSID};
 
 enum sql_datatypes {TEXT, INT, UNSIGNED_BIG_INT, BLOB};
 
@@ -290,6 +295,7 @@ struct eap_noob_server_data {
     u32 state;
     u32 cryptosuite[MAX_SUP_CSUITES];
     u32 dir;
+    u32 oob_retries;
     u32 minsleep;
     u32 keying_mode;
     u32 rcvd_params;
@@ -323,6 +329,7 @@ struct eap_noob_peer_data {
     u32 cryptosuite;
     u32 cryptosuitePrev;
     u32 dir;
+    u32 max_oob_retries;
     u32 minsleep;
     u32 config_params;
 

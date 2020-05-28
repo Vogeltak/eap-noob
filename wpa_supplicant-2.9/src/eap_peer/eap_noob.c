@@ -491,6 +491,7 @@ static void columns_ephemeralstate(struct eap_noob_peer_context * data, sqlite3_
     data->server_attr->state = sqlite3_column_int(stmt, 13);
     data->server_attr->ecdh_exchange_data->jwk_serv = os_strdup((char *) sqlite3_column_text(stmt, 14));
     data->server_attr->ecdh_exchange_data->jwk_peer = os_strdup((char *) sqlite3_column_text(stmt, 15));
+    data->server_attr->oob_retries = sqlite3_column_int(stmt, 16);
     eap_noob_decode_vers_cryptosuites(data, Vers, Cryptosuites);
 }
 
@@ -1401,6 +1402,10 @@ static int eap_noob_db_update(struct eap_noob_peer_context * data, u8 type)
             snprintf(query, MAX_QUERY_LEN, "UPDATE EphemeralState SET ErrorCode=? where PeerId=?");
             ret = eap_noob_exec_query(data, query, NULL, 4, INT, data->server_attr->err_code, TEXT, data->server_attr->PeerId);
             break;
+        case UPDATE_OOB_RETRIES:
+            snprintf(query, MAX_QUERY_LEN, "UPDATE EphemeralState SET OobRetries=? WHERE PeerId=?");
+            ret = eap_noob_exec_query(data, query, NULL, 4, INT, data->server_attr->oob_retries, TEXT, data->server_attr->PeerId);
+            break;
         case DELETE_SSID:
             snprintf(query, MAX_QUERY_LEN, "DELETE FROM EphemeralState WHERE Ssid=?");
             ret = eap_noob_exec_query(data, query, NULL, 2, TEXT, data->server_attr->ssid);
@@ -1445,14 +1450,14 @@ static int eap_noob_db_update_initial_exchange_info(struct eap_sm * sm, struct e
     if (err < 0) { ret = FAILURE; goto EXIT; }
 
     snprintf(query, MAX_QUERY_LEN,"INSERT INTO EphemeralState (Ssid, PeerId, Vers, Cryptosuites, Realm, Dirs, "
-            "ServerInfo, Ns, Np, Z, MacInput, PeerState, JwkServer, JwkPeer) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-    ret = eap_noob_exec_query(data, query, NULL, 31, TEXT, wpa_s->current_ssid->ssid, TEXT, data->server_attr->PeerId,
+            "ServerInfo, Ns, Np, Z, MacInput, PeerState, JwkServer, JwkPeer, OobRetries) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    ret = eap_noob_exec_query(data, query, NULL, 33, TEXT, wpa_s->current_ssid->ssid, TEXT, data->server_attr->PeerId,
             TEXT,  Vers, TEXT, Cryptosuites, TEXT, data->server_attr->Realm, INT, data->server_attr->dir,
             TEXT, data->server_attr->server_info, BLOB, NONCE_LEN, data->server_attr->kdf_nonce_data->Ns, BLOB,
             NONCE_LEN, data->server_attr->kdf_nonce_data->Np, BLOB, ECDH_SHARED_SECRET_LEN,
             data->server_attr->ecdh_exchange_data->shared_key, TEXT, data->server_attr->mac_input_str, INT,
             data->server_attr->state, TEXT, data->server_attr->ecdh_exchange_data->jwk_serv,
-            TEXT, data->server_attr->ecdh_exchange_data->jwk_peer);
+            TEXT, data->server_attr->ecdh_exchange_data->jwk_peer, INT, 0);
 
     if (FAILURE == ret) {
         wpa_printf(MSG_ERROR, "EAP-NOOB: DB value insertion failed");
@@ -2857,6 +2862,11 @@ static void eap_noob_assign_config(char * conf_name,char * conf_value,struct eap
         data->config_params |= PEER_ID_NUM_RCVD;
         wpa_printf(MSG_DEBUG, "EAP-NOOB: FILE  READ= %s",data->peer_config_params->Peer_ID_Num);
     }
+    else if (0 == strcmp("OobRetries", conf_name)) {
+        data->max_oob_retries = (int) strtol(conf_value, NULL, 10);
+        data->config_params |= MAX_OOB_RETRIES_RCVD;
+        wpa_printf(MSG_DEBUG, "EAP-NOOB: FILE READ = %d", data->max_oob_retries);
+    }
     else if (0 == strcmp("MinSleepDefault", conf_name)) {
         eap_noob_globle_conf.default_minsleep = (int) strtol(conf_value, NULL, 10);
         data->config_params |= DEF_MIN_SLEEP_RCVD;
@@ -2928,6 +2938,8 @@ static int eap_noob_handle_incomplete_conf(struct eap_noob_peer_context * data)
         data->peer_attr->cryptosuite = SUITE_ONE;
     if (! (data->peer_attr->config_params & DIRS_RCVD))
         data->peer_attr->dir = PEER_TO_SERV;
+    if (! (data->peer_attr->config_params & MAX_OOB_RETRIES_RCVD))
+        data->peer_attr->max_oob_retries = DEFAULT_MAX_OOB_RETRIES;
     if (! (data->peer_attr->config_params & DEF_MIN_SLEEP_RCVD))
         eap_noob_globle_conf.default_minsleep = 0;
     if (! (data->peer_attr->config_params & MSG_ENC_FMT_RCVD))
@@ -3098,6 +3110,20 @@ static int eap_noob_peer_ctxt_init(struct eap_sm * sm,  struct eap_noob_peer_con
                 data->server_attr->state = OOB_RECEIVED_STATE;
             } else {
                 wpa_printf(MSG_INFO, "EAP-NOOB: Received Hoob does not match local Hoob");
+
+                // Increase number of invalid Hoobs received
+                data->server_attr->oob_retries++;
+                wpa_printf(MSG_DEBUG, "EAP-NOOB: OOB retries = %d", data->server_attr->oob_retries);
+                eap_noob_db_update(data, UPDATE_OOB_RETRIES);
+
+                // Reset the peer to Unregistered state if the maximum
+                // number of OOB retries (i.e. invalid Hoobs) has been reached.
+                if (data->server_attr->oob_retries >= data->peer_attr->max_oob_retries) {
+                    data->server_attr->state = UNREGISTERED_STATE;
+                    wpa_printf(MSG_DEBUG, "EAP-NOOB: Max OOB retries exceeded. Reset peer to Unregistered state");
+                    // Remove the current Ephemeral entries
+                    eap_noob_db_update(data, DELETE_SSID);
+                }
             }
         }
     }
