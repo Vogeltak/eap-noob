@@ -356,6 +356,13 @@ static int eap_noob_db_functions(struct eap_noob_server_context * data, u8 type)
             ret = eap_noob_exec_query(data, query, NULL, 4, INT, data->peer_attr->oob_retries,
                                       TEXT, data->peer_attr->PeerId);
             break;
+        case DELETE_EPHEMERAL:
+            os_snprintf(query, MAX_LINE_SIZE, "DELETE FROM EphemeralState WHERE PeerId=?");
+            ret = eap_noob_exec_query(data, query, NULL, 2, TEXT, data->peer_attr->PeerId);
+
+            os_snprintf(query, MAX_LINE_SIZE, "DELETE FROM EphemeralNoob WHERE PeerId=?");
+            ret &= eap_noob_exec_query(data, query, NULL, 2, TEXT, data->peer_attr->PeerId);
+            break;
         case UPDATE_STATE_MINSLP:
             os_snprintf(query, MAX_LINE_SIZE, "UPDATE EphemeralState SET ServerState=?, SleepCount =? where PeerId=?");
             ret = eap_noob_exec_query(data, query, NULL, 6, INT, data->peer_attr->server_state, INT,
@@ -2969,6 +2976,8 @@ static void eap_noob_rsp_type_nine(struct eap_noob_server_context * data)
                 if (data->peer_attr->oob_retries >= data->server_attr->max_oob_retries) {
                     eap_noob_change_state(data, UNREGISTERED_STATE);
                     wpa_printf(MSG_DEBUG, "EAP-NOOB: Max OOB retries exceeded. Reset server to Unregistered state");
+                    // Remove the current Ephemeral entries
+                    eap_noob_db_functions(data, DELETE_EPHEMERAL);
                 }
             }
         }
