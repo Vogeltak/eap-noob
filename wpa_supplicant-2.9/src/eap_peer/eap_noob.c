@@ -3100,7 +3100,7 @@ static int eap_noob_peer_ctxt_init(struct eap_sm * sm,  struct eap_noob_peer_con
             // Encode the Hoob in base64
             // As per the specification in the EAP-NOOB standard, the length of the
             // Hoob should be 16 bytes, which is 22 bytes after base64 encoding.
-            eap_noob_Base64Encode(hash, 16, &hoob_b64);
+            eap_noob_Base64Encode(hash, HASH_LEN, &hoob_b64);
             wpa_printf(MSG_DEBUG, "EAP-NOOB: Local Hoob base64 %s", hoob_b64);
 
             // Verify the locally generated Hoob against the one received out-of-band

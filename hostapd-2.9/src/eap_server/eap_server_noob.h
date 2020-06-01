@@ -298,6 +298,7 @@ struct eap_noob_peer_data {
     char * peerinfo;
     char * peer_snum;  /* Only set, not used */
     char * mac;
+
     Boolean record_present;
     Boolean noobid_required;
 

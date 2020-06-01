@@ -42,6 +42,7 @@
 #define KMP_LEN                 32
 #define MAC_LEN                 32
 #define MAX_X25519_LEN          48
+#define HASH_LEN                16
 
 #define NUM_OF_STATES           5
 #define MAX_MSG_TYPES           9
